@@ -21,31 +21,47 @@ Each phase produces a document. Each transition requires explicit human approval
 
 ## Quick Start
 
+Install into your project with a single command:
+
 ```bash
-# One-liner (downloads from GitHub, no clone needed)
 cd /path/to/your/project
+
+# Auto-detect IDEs (installs adapters only for IDEs found in your project)
 curl -fsSL https://raw.githubusercontent.com/sipki-tech/spec-driven-developer-skill/main/install.sh | sh
+
+# Or specify IDEs explicitly
+curl -fsSL https://raw.githubusercontent.com/sipki-tech/spec-driven-developer-skill/main/install.sh | sh -s -- --ide cursor,copilot
 ```
 
-Or if you prefer to inspect the script first:
+<details>
+<summary>Alternative: clone and install</summary>
 
 ```bash
-# Clone and install
 git clone https://github.com/sipki-tech/spec-driven-developer-skill.git /tmp/sdd
 cd /path/to/your/project
-sh /tmp/sdd/install.sh
+sh /tmp/sdd/install.sh --ide cursor
 ```
+</details>
 
-The installer:
-1. Copies `.spec-driven-dev/` (core) into your project (downloads from GitHub if no local source)
-2. Detects which IDEs you use and creates adapters (only for IDEs with existing config)
-3. Adds `state/` to `.gitignore`
+### Supported `--ide` values
 
-Flags:
-- `--update` — refresh core files, preserve state/ and existing adapters
-- `--uninstall` — remove core files and adapters
-- `--all-ides` — install adapters for all supported IDEs regardless of detection
-- `--ide cursor,copilot` — install adapters only for specified IDEs (comma-separated: `cursor`, `windsurf`, `claude` / `opencode`, `copilot`, `kiro`, `antigravity`)
+| Value | IDE | Adapter File |
+|-------|-----|-------------|
+| `cursor` | Cursor | `.cursor/rules/spec-driven-dev.mdc` |
+| `windsurf` | Windsurf | `.windsurfrules` |
+| `claude` / `opencode` | Claude Code / Open Code | `CLAUDE.md` |
+| `copilot` | VSCode Copilot | `.github/copilot-instructions.md` |
+| `kiro` | Kiro | `.kiro/specs/spec-driven-dev.md` |
+| `antigravity` | Antigravity | `.antigravity/agents.yaml` |
+
+### Installer flags
+
+| Flag | Description |
+|------|-------------|
+| `--ide cursor,copilot,...` | Install adapters only for specified IDEs |
+| `--all-ides` | Install adapters for all supported IDEs |
+| `--update` | Refresh core files, preserve state/ and existing adapters |
+| `--uninstall` | Remove core files and adapters |
 
 Then tell your AI assistant:
 
