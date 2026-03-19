@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+      - name: Lint pipeline.sh
+        run: shellcheck -s sh .spec-driven-dev/scripts/pipeline.sh
+      - name: Lint install.sh
+        run: shellcheck -s sh install.sh
+
+  integration:
+    name: Integration (${{ matrix.shell }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        shell: [bash, dash, zsh]
+        exclude:
+          - os: macos-latest
+            shell: dash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shell (if needed)
+        if: matrix.shell == 'dash' && runner.os == 'Linux'
+        run: sudo apt-get install -y dash
+
+      - name: Run integration tests
+        shell: ${{ matrix.shell }} {0}
+        run: |
+          set -e
+          P=".spec-driven-dev/scripts/pipeline.sh"
+
+          echo "=== Test: help ==="
+          sh "$P" help
+
+          echo "=== Test: version ==="
+          sh "$P" version
+
+          echo "=== Test: init ==="
+          sh "$P" init test-feature
+
+          echo "=== Test: status ==="
+          sh "$P" status
+
+          echo "=== Test: artifact ==="
+          sh "$P" artifact state/test-requirements.md
+
+          echo "=== Test: status after artifact ==="
+          sh "$P" status
+
+          echo "=== Test: approve ==="
+          sh "$P" approve
+
+          echo "=== Test: status after approve ==="
+          sh "$P" status
+
+          echo "=== Test: artifact (design) ==="
+          sh "$P" artifact state/test-design.md
+
+          echo "=== Test: approve (design) ==="
+          sh "$P" approve
+
+          echo "=== Test: artifact (impl) ==="
+          sh "$P" artifact state/test-impl.md
+
+          echo "=== Test: approve (impl → done) ==="
+          sh "$P" approve
+
+          echo "=== Test: status (done) ==="
+          sh "$P" status
+
+          echo "=== Test: history ==="
+          sh "$P" history
+
+          echo "=== Test: reset ==="
+          sh "$P" init reset-test <<< "y"
+          echo "y" | sh "$P" reset
+
+          echo "=== Test: path traversal rejected ==="
+          sh "$P" init traversal-test
+          if sh "$P" artifact "../../../etc/passwd" 2>/dev/null; then
+            echo "FAIL: path traversal was not rejected"
+            exit 1
+          fi
+          echo "PASS: path traversal correctly rejected"
+
+          echo "=== Test: JSON validity ==="
+          sh "$P" init json-test
+          sh "$P" artifact "state/test.md"
+          # Check JSON is parseable (python is available on both runners)
+          python3 -c "import json; json.load(open('.spec-driven-dev/state/pipeline.json'))"
+          echo "PASS: pipeline.json is valid JSON"
+
+          echo "=== All tests passed ==="
