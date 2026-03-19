@@ -1,11 +1,13 @@
 #!/usr/bin/env sh
 # Spec-Driven Dev — Installer / Updater / Uninstaller
-# Usage: sh install.sh [--update] [--uninstall] [--all-ides]
+# Usage: sh install.sh [--update] [--uninstall] [--all-ides] [--ide cursor,copilot,...]
 #
 # Installs .spec-driven-dev/ core and creates IDE-specific adapters.
 # With --update:    refreshes core files, preserves state/ and existing adapters.
 # With --uninstall: removes core files and adapters (preserves state/ archive).
 # With --all-ides:  install adapters for all supported IDEs regardless of detection.
+# With --ide LIST:  install adapters for specific IDEs (comma-separated).
+#                   Supported: cursor, windsurf, claude (or opencode), copilot, kiro, antigravity
 
 set -e
 
@@ -40,15 +42,65 @@ CORE_DIR="$PROJECT_ROOT/.spec-driven-dev"
 IS_UPDATE=false
 IS_UNINSTALL=false
 ALL_IDES=false
+IDE_EXPLICIT=false
+IDE_CURSOR=false
+IDE_WINDSURF=false
+IDE_CLAUDE=false
+IDE_COPILOT=false
+IDE_KIRO=false
+IDE_ANTIGRAVITY=false
 
-for arg in "$@"; do
-  case "$arg" in
+parse_ide_list() {
+  local list="$1"
+  IDE_EXPLICIT=true
+  # Split comma-separated list
+  local old_ifs="$IFS"
+  IFS=','
+  for ide in $list; do
+    case "$ide" in
+      cursor)       IDE_CURSOR=true ;;
+      windsurf)     IDE_WINDSURF=true ;;
+      claude|opencode) IDE_CLAUDE=true ;;
+      copilot)      IDE_COPILOT=true ;;
+      kiro)         IDE_KIRO=true ;;
+      antigravity)  IDE_ANTIGRAVITY=true ;;
+      *)            die "Unknown IDE: $ide. Supported: cursor, windsurf, claude (or opencode), copilot, kiro, antigravity" ;;
+    esac
+  done
+  IFS="$old_ifs"
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
     --update)    IS_UPDATE=true ;;
     --uninstall) IS_UNINSTALL=true ;;
     --all-ides)  ALL_IDES=true ;;
-    *)           die "Unknown flag: $arg. Usage: sh install.sh [--update] [--uninstall] [--all-ides]" ;;
+    --ide)       shift; [ -z "$1" ] && die "--ide requires a comma-separated list (e.g. --ide cursor,copilot)"; parse_ide_list "$1" ;;
+    --ide=*)     parse_ide_list "${1#--ide=}" ;;
+    *)           die "Unknown flag: $1. Usage: sh install.sh [--update] [--uninstall] [--all-ides] [--ide cursor,copilot,...]" ;;
   esac
+  shift
 done
+
+# Helper: check if IDE should be installed
+should_install_ide() {
+  local ide="$1"
+  # Explicit --ide flag takes priority
+  if [ "$IDE_EXPLICIT" = true ]; then
+    case "$ide" in
+      cursor)      [ "$IDE_CURSOR" = true ] ;;
+      windsurf)    [ "$IDE_WINDSURF" = true ] ;;
+      claude)      [ "$IDE_CLAUDE" = true ] ;;
+      copilot)     [ "$IDE_COPILOT" = true ] ;;
+      kiro)        [ "$IDE_KIRO" = true ] ;;
+      antigravity) [ "$IDE_ANTIGRAVITY" = true ] ;;
+      *)           return 1 ;;
+    esac
+    return
+  fi
+  # --all-ides overrides auto-detection
+  [ "$ALL_IDES" = true ]
+}
 
 # --- uninstall ---
 
@@ -122,11 +174,12 @@ mkdir -p "$CORE_DIR/scripts"
 mkdir -p "$CORE_DIR/state/archive"
 
 # Detect source: local clone or remote (curl pipe)
+# Must check for actual source file, not just directory (mkdir above creates .spec-driven-dev/)
 SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || SCRIPT_DIR=""
 LOCAL_SOURCE="$SCRIPT_DIR/.spec-driven-dev"
 IS_REMOTE=false
 
-if [ -z "$SCRIPT_DIR" ] || [ ! -d "$LOCAL_SOURCE" ]; then
+if [ -z "$SCRIPT_DIR" ] || [ ! -f "$LOCAL_SOURCE/skill.md" ]; then
   IS_REMOTE=true
   info "No local source found — downloading from GitHub..."
 fi
@@ -204,7 +257,7 @@ install_adapter() {
 }
 
 # Cursor
-if [ -d "$PROJECT_ROOT/.cursor" ] || [ "$ALL_IDES" = true ]; then
+if [ -d "$PROJECT_ROOT/.cursor" ] || should_install_ide cursor; then
   install_adapter "Cursor" ".cursor/rules/spec-driven-dev.mdc" \
 "---
 description: Spec-driven development workflow with 3-phase pipeline
@@ -219,7 +272,7 @@ ${JSON_FALLBACK}
 fi
 
 # Windsurf
-if [ -f "$PROJECT_ROOT/.windsurfrules" ] || [ "$ALL_IDES" = true ]; then
+if [ -f "$PROJECT_ROOT/.windsurfrules" ] || should_install_ide windsurf; then
   install_adapter "Windsurf" ".windsurfrules" \
 "## Spec-Driven Development
 
@@ -230,7 +283,7 @@ ${JSON_FALLBACK}
 fi
 
 # Claude Code
-if [ -f "$PROJECT_ROOT/CLAUDE.md" ] || [ "$ALL_IDES" = true ]; then
+if [ -f "$PROJECT_ROOT/CLAUDE.md" ] || should_install_ide claude; then
   install_adapter "Claude Code" "CLAUDE.md" \
 "## Spec-Driven Development
 
@@ -241,7 +294,7 @@ ${JSON_FALLBACK}
 fi
 
 # VSCode Copilot
-if [ -d "$PROJECT_ROOT/.github" ] || [ "$ALL_IDES" = true ]; then
+if [ -d "$PROJECT_ROOT/.github" ] || should_install_ide copilot; then
   install_adapter "VSCode Copilot" ".github/copilot-instructions.md" \
 "## Spec-Driven Development
 
@@ -252,7 +305,7 @@ ${JSON_FALLBACK}
 fi
 
 # Kiro
-if [ -d "$PROJECT_ROOT/.kiro" ] || [ "$ALL_IDES" = true ]; then
+if [ -d "$PROJECT_ROOT/.kiro" ] || should_install_ide kiro; then
   install_adapter "Kiro" ".kiro/specs/spec-driven-dev.md" \
 "## Spec-Driven Development
 
@@ -265,7 +318,7 @@ ${JSON_FALLBACK}
 fi
 
 # Antigravity
-if [ -d "$PROJECT_ROOT/.antigravity" ] || [ "$ALL_IDES" = true ]; then
+if [ -d "$PROJECT_ROOT/.antigravity" ] || should_install_ide antigravity; then
   install_adapter "Antigravity" ".antigravity/agents.yaml" \
 "agents:
   spec-driven-dev:

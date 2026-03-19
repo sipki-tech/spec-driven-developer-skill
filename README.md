@@ -45,6 +45,7 @@ Flags:
 - `--update` — refresh core files, preserve state/ and existing adapters
 - `--uninstall` — remove core files and adapters
 - `--all-ides` — install adapters for all supported IDEs regardless of detection
+- `--ide cursor,copilot` — install adapters only for specified IDEs (comma-separated: `cursor`, `windsurf`, `claude` / `opencode`, `copilot`, `kiro`, `antigravity`)
 
 Then tell your AI assistant:
 
