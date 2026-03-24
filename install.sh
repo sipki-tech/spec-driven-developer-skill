@@ -1,17 +1,14 @@
 #!/usr/bin/env sh
 # Spec-Driven Dev — Installer / Updater / Uninstaller
-# Usage: sh install.sh [--update] [--uninstall] [--all-ides] [--ide cursor,copilot,...]
+# Usage: sh install.sh [--update] [--uninstall]
 #
-# Installs .spec-driven-dev/ core and creates IDE-specific adapters.
-# With --update:    refreshes core files, preserves state/ and existing adapters.
-# With --uninstall: removes core files and adapters (preserves state/ archive).
-# With --all-ides:  install adapters for all supported IDEs regardless of detection.
-# With --ide LIST:  install adapters for specific IDEs (comma-separated).
-#                   Supported: cursor, windsurf, claude (or opencode), copilot, kiro, antigravity
+# Installs .spec-driven-dev/ core into the current directory.
+# With --update:    refreshes core files, preserves state/.
+# With --uninstall: removes core files (preserves state/ archive).
 
 set -e
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 REPO_RAW="https://raw.githubusercontent.com/sipki-tech/spec-driven-developer-skill"
 REPO_BRANCH="main"
 
@@ -41,66 +38,15 @@ PROJECT_ROOT="$(pwd)"
 CORE_DIR="$PROJECT_ROOT/.spec-driven-dev"
 IS_UPDATE=false
 IS_UNINSTALL=false
-ALL_IDES=false
-IDE_EXPLICIT=false
-IDE_CURSOR=false
-IDE_WINDSURF=false
-IDE_CLAUDE=false
-IDE_COPILOT=false
-IDE_KIRO=false
-IDE_ANTIGRAVITY=false
-
-parse_ide_list() {
-  local list="$1"
-  IDE_EXPLICIT=true
-  # Split comma-separated list
-  local old_ifs="$IFS"
-  IFS=','
-  for ide in $list; do
-    case "$ide" in
-      cursor)       IDE_CURSOR=true ;;
-      windsurf)     IDE_WINDSURF=true ;;
-      claude|opencode) IDE_CLAUDE=true ;;
-      copilot)      IDE_COPILOT=true ;;
-      kiro)         IDE_KIRO=true ;;
-      antigravity)  IDE_ANTIGRAVITY=true ;;
-      *)            die "Unknown IDE: $ide. Supported: cursor, windsurf, claude (or opencode), copilot, kiro, antigravity" ;;
-    esac
-  done
-  IFS="$old_ifs"
-}
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --update)    IS_UPDATE=true ;;
     --uninstall) IS_UNINSTALL=true ;;
-    --all-ides)  ALL_IDES=true ;;
-    --ide)       shift; [ -z "$1" ] && die "--ide requires a comma-separated list (e.g. --ide cursor,copilot)"; parse_ide_list "$1" ;;
-    --ide=*)     parse_ide_list "${1#--ide=}" ;;
-    *)           die "Unknown flag: $1. Usage: sh install.sh [--update] [--uninstall] [--all-ides] [--ide cursor,copilot,...]" ;;
+    *)           die "Unknown flag: $1. Usage: sh install.sh [--update] [--uninstall]" ;;
   esac
   shift
 done
-
-# Helper: check if IDE should be installed
-should_install_ide() {
-  local ide="$1"
-  # Explicit --ide flag takes priority
-  if [ "$IDE_EXPLICIT" = true ]; then
-    case "$ide" in
-      cursor)      [ "$IDE_CURSOR" = true ] ;;
-      windsurf)    [ "$IDE_WINDSURF" = true ] ;;
-      claude)      [ "$IDE_CLAUDE" = true ] ;;
-      copilot)     [ "$IDE_COPILOT" = true ] ;;
-      kiro)        [ "$IDE_KIRO" = true ] ;;
-      antigravity) [ "$IDE_ANTIGRAVITY" = true ] ;;
-      *)           return 1 ;;
-    esac
-    return
-  fi
-  # --all-ides overrides auto-detection
-  [ "$ALL_IDES" = true ]
-}
 
 # --- uninstall ---
 
@@ -112,18 +58,13 @@ if [ "$IS_UNINSTALL" = true ]; then
     exit 0
   fi
 
-  warn "This will remove .spec-driven-dev/ and all IDE adapters."
+  warn "This will remove .spec-driven-dev/."
   printf "  Continue? [y/N] "
   read -r answer
   case "$answer" in
     [yY]*) ;;
     *)     printf "  Aborted.\n"; exit 0 ;;
   esac
-
-  # Remove IDE adapter files
-  rm -f "$PROJECT_ROOT/.cursor/rules/spec-driven-dev.mdc"
-  rm -f "$PROJECT_ROOT/.kiro/specs/spec-driven-dev.md"
-  rm -f "$PROJECT_ROOT/.antigravity/agents.yaml"
 
   # Remove .spec-driven-dev/ (preserve archive if user wants)
   if [ -d "$CORE_DIR/state/archive" ] && [ "$(find "$CORE_DIR/state/archive" -mindepth 1 -maxdepth 1 2>/dev/null)" ]; then
@@ -136,9 +77,12 @@ if [ "$IS_UNINSTALL" = true ]; then
         # Remove everything except state/archive
         rm -f "$CORE_DIR/skill.md"
         rm -f "$CORE_DIR/scripts/pipeline.sh"
+        rm -f "$CORE_DIR/templates/explore.md"
         rm -f "$CORE_DIR/templates/requirements.md"
         rm -f "$CORE_DIR/templates/design.md"
         rm -f "$CORE_DIR/templates/implementation.md"
+        rm -f "$CORE_DIR/templates/verify.md"
+        rm -f "$CORE_DIR/config.yaml"
         rm -f "$CORE_DIR/state/pipeline.kv"
         rm -f "$CORE_DIR/state/pipeline.json"
         info "Core removed. Archives preserved in .spec-driven-dev/state/archive/"
@@ -149,7 +93,6 @@ if [ "$IS_UNINSTALL" = true ]; then
   fi
 
   info "Uninstall complete."
-  warn "Note: sections appended to .windsurfrules, CLAUDE.md, .github/copilot-instructions.md must be removed manually."
   exit 0
 fi
 
@@ -212,121 +155,38 @@ copy_core_file "scripts/pipeline.sh"
 copy_core_file "templates/requirements.md"
 copy_core_file "templates/design.md"
 copy_core_file "templates/implementation.md"
+copy_core_file "templates/explore.md"
+copy_core_file "templates/verify.md"
 
 chmod +x "$CORE_DIR/scripts/pipeline.sh"
 
-# --- detect and install IDE adapters ---
+# --- generate starter config.yaml (only on fresh install) ---
 
-header "Detecting IDEs..."
+if [ ! -f "$CORE_DIR/config.yaml" ]; then
+  cat > "$CORE_DIR/config.yaml" << 'CONFIGEOF'
+# Project configuration for spec-driven development.
+# AI agents read this file before each phase to get project context.
+# Uncomment and fill in the sections relevant to your project.
 
-# JSON fallback note for IDEs that may not support shell
-JSON_FALLBACK="
-> Note: If your IDE does not support running shell commands, check \`.spec-driven-dev/state/pipeline.json\` directly for the current pipeline state."
+# context: |
+#   Tech stack: ...
+#   Testing: ...
+#   Build: ...
+#   Lint: ...
+#   Conventions: ...
+#   Repo structure: ...
 
-install_adapter() {
-  local name="$1"
-  local path="$2"
-  local content="$3"
-  local mode="${4:-create}"   # create | append
-
-  if [ "$IS_UPDATE" = true ] && [ -f "$PROJECT_ROOT/$path" ]; then
-    skip "$name — adapter exists (use manual update)"
-    return
-  fi
-
-  local dir
-  dir="$(dirname "$PROJECT_ROOT/$path")"
-  mkdir -p "$dir"
-
-  if [ "$mode" = "append" ] && [ -f "$PROJECT_ROOT/$path" ]; then
-    # Check if already contains our section (fixed-string match)
-    if grep -qF "spec-driven-dev" "$PROJECT_ROOT/$path" 2>/dev/null; then
-      skip "$name — section already present"
-      return
-    fi
-    # Ensure file ends with newline before appending
-    if [ -s "$PROJECT_ROOT/$path" ] && [ -n "$(tail -c1 "$PROJECT_ROOT/$path")" ]; then
-      echo "" >> "$PROJECT_ROOT/$path"
-    fi
-    printf "%s" "$content" >> "$PROJECT_ROOT/$path"
-    info "$name — section appended to $path"
-  else
-    printf "%s" "$content" > "$PROJECT_ROOT/$path"
-    info "$name — created $path"
-  fi
-}
-
-# Cursor
-if [ -d "$PROJECT_ROOT/.cursor" ] || should_install_ide cursor; then
-  install_adapter "Cursor" ".cursor/rules/spec-driven-dev.mdc" \
-"---
-description: Spec-driven development workflow with 3-phase pipeline
-globs: \"**/*\"
-alwaysApply: true
----
-
-Read and follow \`.spec-driven-dev/skill.md\` for all feature development.
-Before starting any feature, run: \`sh .spec-driven-dev/scripts/pipeline.sh status\`
-${JSON_FALLBACK}
-"
-fi
-
-# Windsurf
-if [ -f "$PROJECT_ROOT/.windsurfrules" ] || should_install_ide windsurf; then
-  install_adapter "Windsurf" ".windsurfrules" \
-"## Spec-Driven Development
-
-Read and follow \`.spec-driven-dev/skill.md\` for all feature development.
-Before starting any feature, run: \`sh .spec-driven-dev/scripts/pipeline.sh status\`
-${JSON_FALLBACK}
-" "append"
-fi
-
-# Claude Code
-if [ -f "$PROJECT_ROOT/CLAUDE.md" ] || should_install_ide claude; then
-  install_adapter "Claude Code" "CLAUDE.md" \
-"## Spec-Driven Development
-
-Read and follow \`.spec-driven-dev/skill.md\` for all feature development.
-Before starting any feature, run: \`sh .spec-driven-dev/scripts/pipeline.sh status\`
-${JSON_FALLBACK}
-" "append"
-fi
-
-# VSCode Copilot
-if [ -d "$PROJECT_ROOT/.github" ] || should_install_ide copilot; then
-  install_adapter "VSCode Copilot" ".github/copilot-instructions.md" \
-"## Spec-Driven Development
-
-Read and follow \`.spec-driven-dev/skill.md\` for all feature development.
-Before starting any feature, run: \`sh .spec-driven-dev/scripts/pipeline.sh status\`
-${JSON_FALLBACK}
-" "append"
-fi
-
-# Kiro
-if [ -d "$PROJECT_ROOT/.kiro" ] || should_install_ide kiro; then
-  install_adapter "Kiro" ".kiro/specs/spec-driven-dev.md" \
-"## Spec-Driven Development
-
-This project uses a custom spec-driven pipeline in \`.spec-driven-dev/\`.
-Refer to \`.spec-driven-dev/skill.md\` for the full workflow.
-Phase templates are in \`.spec-driven-dev/templates/\`.
-State is managed via \`sh .spec-driven-dev/scripts/pipeline.sh\`.
-${JSON_FALLBACK}
-"
-fi
-
-# Antigravity
-if [ -d "$PROJECT_ROOT/.antigravity" ] || should_install_ide antigravity; then
-  install_adapter "Antigravity" ".antigravity/agents.yaml" \
-"agents:
-  spec-driven-dev:
-    description: 'Spec-driven development: 3-phase pipeline with approval gates'
-    instructions: .spec-driven-dev/skill.md
-    tools:
-      - shell: sh .spec-driven-dev/scripts/pipeline.sh
-"
+# rules:
+#   requirements:
+#     - ...
+#   design:
+#     - ...
+#   implementation:
+#     - ...
+CONFIGEOF
+  info "config.yaml (starter template)"
+else
+  info "config.yaml (preserved)"
 fi
 
 # --- gitignore ---

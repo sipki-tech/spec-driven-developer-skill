@@ -14,12 +14,22 @@ Before starting, read the approved requirements document:
 ```
 sh .spec-driven-dev/scripts/pipeline.sh status
 ```
-The requirements document path is in `history[-1].artifact` (or shown in status output under completed phases).
+The requirements document path is in `history[1].artifact` (or shown in status output under completed phases).
 
 After the user approves the design document:
 1. Save the document to `.spec-driven-dev/state/<feature-name>-design.md`
 2. Register: `sh .spec-driven-dev/scripts/pipeline.sh artifact .spec-driven-dev/state/<feature-name>-design.md`
 3. Wait for user to confirm, then: `sh .spec-driven-dev/scripts/pipeline.sh approve`
+
+---
+
+## Project Context
+
+If `.spec-driven-dev/config.yaml` exists, read it now and apply:
+- **`context`** → treat as background knowledge about this project.
+- **`rules.design`** → treat as additional rules for THIS phase (appended to the rules below, not replacing them).
+
+If the file does not exist, skip this step.
 
 ---
 
@@ -66,7 +76,11 @@ Provide a table of all files that must be created or modified:
 
 | File | Change Type | Description |
 |------|-------------|-------------|
-| `path/to/file` | New / Modified | What is added or changed and why |
+| `path/to/file` | `[NEW]` / `[MODIFIED]` / `[DELETED]` | What specifically is added, changed, or removed |
+
+For `[MODIFIED]` files — state **what exactly changes** (not "various changes"). Example:
+- ✓ `[MODIFIED]` — adds `refreshToken()` method, modifies `authenticate()` return type
+- ✗ `[MODIFIED]` — various authentication changes
 
 #### Files NOT Requiring Changes
 
@@ -212,10 +226,12 @@ Before presenting the design document, verify:
 
 ## Antipatterns to Avoid
 
-- **No function bodies** — interfaces show signatures only; no implementation logic
-- **No task lists** — this is a design document, not a work breakdown structure
-- **Do not skip "Files NOT Requiring Changes"** — omitting it suggests the scope was not fully considered
-- **No properties without "For all"** — existential claims are not verifiable properties
-- **No properties without a `Validates` reference** — every property must trace to a requirement
-- **No vague wording** — "the system should handle errors gracefully" is not a design specification
-- **No scope creep** — do not design features or behaviors not present in the requirements document
+| Antipattern | WRONG ❌ | RIGHT ✓ | Why |
+|---|---|---|---|
+| Function bodies | `func refresh() { cache.Get(key)... }` | `func refresh(token Token) (Token, error)` | Interfaces show signatures only |
+| Task lists | "Step 1: create file, Step 2: add tests" | Architecture + interfaces + properties | This is design, not work breakdown |
+| Skipping unchanged files | "Files NOT Requiring Changes" table is empty | Explicitly list files in scope that won't change | Omission suggests scope not fully considered |
+| Existential properties | "There exists a case where refresh works" | "For all expired tokens, refresh returns valid token" | Properties must use universal quantifier |
+| Unlinked properties | "Property 3: tokens are secure" | "Property 3: ... Validates: REQ-1.2" | Every property must trace to a requirement |
+| Vague modification scope | `[MODIFIED]` — "various authentication changes" | `[MODIFIED]` — "adds refreshToken(), modifies authenticate() return type" | Must state what exactly changes |
+| Scope creep | Designing rate limiting not in requirements | Only design what requirements specify | Stay within approved requirements |

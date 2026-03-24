@@ -12,11 +12,22 @@ Before starting, check the current pipeline state:
 ```
 sh .spec-driven-dev/scripts/pipeline.sh status
 ```
+The exploration document path is in `history[0].artifact` (or shown in status output under completed phases). Read it for context on what was investigated.
 
 After the user approves the requirements document:
 1. Save the document to `.spec-driven-dev/state/<feature-name>-requirements.md`
 2. Register the artifact: `sh .spec-driven-dev/scripts/pipeline.sh artifact .spec-driven-dev/state/<feature-name>-requirements.md`
 3. Wait for user to confirm, then: `sh .spec-driven-dev/scripts/pipeline.sh approve`
+
+---
+
+## Project Context
+
+If `.spec-driven-dev/config.yaml` exists, read it now and apply:
+- **`context`** → treat as background knowledge about this project.
+- **`rules.requirements`** → treat as additional rules for THIS phase (appended to the rules below, not replacing them).
+
+If the file does not exist, skip this step.
 
 ---
 
@@ -195,6 +206,22 @@ Resolution: Silent refresh (REQ-1.1) takes priority; fail-fast applies only afte
 
 ---
 
+### 2.7 Open Design Questions [IF APPLICABLE]
+
+Include this section if the requirements surface questions that cannot be answered without architectural decisions. Do **not** answer these questions — flag them for the design phase.
+
+| Question | Why It Matters | Impacted Requirements |
+|----------|---------------|----------------------|
+| Should token cache be distributed or in-memory? | Affects scalability and deployment | REQ-1.1, REQ-1.3 |
+| Per-request or per-session authentication? | Affects security model and UX | REQ-2.1 |
+
+**Rules:**
+- Only include questions that genuinely require design-level decisions
+- Do not propose answers — that's the designer's job
+- Link each question to the requirements it affects
+
+---
+
 ## Quality Control Checklist
 
 Before delivering the document to the user, verify every item:
@@ -207,6 +234,7 @@ Before delivering the document to the user, verify every item:
 - [ ] Requirement numbering is continuous with no gaps
 - [ ] If dependencies exist, §2.5 Topological Order is present
 - [ ] If conflicts exist, §2.6 Conflict Priority is present
+- [ ] If design questions exist, §2.7 Open Design Questions is present
 - [ ] The document is self-contained — no unexplained terms or dangling references
 - [ ] No implementation decisions, code, or pseudocode appear anywhere in the document
 
@@ -214,12 +242,12 @@ Before delivering the document to the user, verify every item:
 
 ## Antipatterns — What This Document Must Never Contain
 
-| Antipattern | Example (wrong) | Why it's wrong |
-|-------------|-----------------|----------------|
-| Architectural solution | "Use a Redis cache for token storage" | Prescribes HOW, not WHAT |
-| Code or pseudocode | `if token.expired { refresh() }` | Implementation detail |
-| Diagram | Mermaid sequence diagram | Belongs in design phase |
-| Vague wording | "The system should handle errors gracefully" | Not verifiable |
-| Combined SHALLs | "…SHALL refresh the token and log the event" | Must be two separate REQs |
-| Unconfirmed requirement | Added by agent without user confirmation | Hallucinated scope |
-| Technology lock-in | "Use JWT with RS256 signing" | Constrains design without user mandate |
+| Antipattern | WRONG ❌ | RIGHT ✓ | Why |
+|---|---|---|---|
+| Architectural solution | "Use a Redis cache for token storage" | "WHEN cache miss occurs, SHALL return fresh data within 100ms" | Prescribes HOW, not WHAT |
+| Code or pseudocode | `if token.expired { refresh() }` | "WHEN token is expired, SHALL attempt refresh" | Implementation detail |
+| Diagram | Mermaid sequence diagram | Prose description of the flow | Belongs in design phase |
+| Vague wording | "The system should handle errors gracefully" | "WHEN refresh fails, SHALL return 401 with error code" | Not verifiable |
+| Combined SHALLs | "…SHALL refresh the token and log the event" | Two REQs: one for refresh, one for logging | Must be one SHALL per REQ |
+| Unconfirmed requirement | Agent adds REQ-3.1 user never mentioned | Only requirements confirmed by user in interview | Hallucinated scope |
+| Technology lock-in | "Use JWT with RS256 signing" | "WHEN issuing tokens, SHALL use cryptographic signing" | Constrains design without user mandate |

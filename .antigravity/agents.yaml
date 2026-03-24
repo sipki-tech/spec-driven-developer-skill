@@ -1,6 +1,0 @@
-agents:
-  spec-driven-dev:
-    description: "Spec-driven development: 3-phase pipeline with approval gates"
-    instructions: .spec-driven-dev/skill.md
-    tools:
-      - shell: sh .spec-driven-dev/scripts/pipeline.sh

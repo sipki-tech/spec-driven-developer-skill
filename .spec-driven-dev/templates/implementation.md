@@ -10,20 +10,31 @@ You do **NOT** write code. You do **NOT** design architecture. You create a sequ
 
 ## Pipeline Integration
 
-Before starting, read BOTH approved input documents:
+Before starting, read ALL approved input documents:
 ```
 sh .spec-driven-dev/scripts/pipeline.sh status
 ```
 From the status output / pipeline.json:
-- `history[0].artifact` → requirements document
-- `history[1].artifact` → design document
+- `history[0].artifact` → exploration document
+- `history[1].artifact` → requirements document
+- `history[2].artifact` → design document
 
-Read both documents before generating the implementation plan.
+Read all documents before generating the implementation plan.
 
 After the user approves the implementation plan:
 1. Save the plan to `.spec-driven-dev/state/<feature-name>-implementation.md`
 2. Register: `sh .spec-driven-dev/scripts/pipeline.sh artifact .spec-driven-dev/state/<feature-name>-implementation.md`
 3. Wait for user to confirm, then: `sh .spec-driven-dev/scripts/pipeline.sh approve`
+
+---
+
+## Project Context
+
+If `.spec-driven-dev/config.yaml` exists, read it now and apply:
+- **`context`** → treat as background knowledge about this project.
+- **`rules.implementation`** → treat as additional rules for THIS phase (appended to the rules below, not replacing them).
+
+If the file does not exist, skip this step.
 
 ---
 

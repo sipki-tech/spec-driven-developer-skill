@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-07-26
+
+### Added
+- **Explore phase** (phase 1) — investigate the problem space, compare approaches, recommend direction before writing requirements
+- **Verify phase** (phase 5) — validate implementation against specs across three dimensions: completeness, correctness, coherence
+- `templates/explore.md` — exploration prompt template (Research Partner role)
+- `templates/verify.md` — verification prompt template (Quality Auditor role)
+- `config.yaml` support — project-level context and per-phase rules via `.spec-driven-dev/config.yaml`
+
+### Changed
+- Pipeline expanded from 3 phases to 5: Explore → Requirements → Design → Implementation → Verify
+- Phase numbering updated: explore=1, requirements=2, design=3, implementation=4, verify=5
+- History indices shifted in templates to accommodate explore phase at position 0
+- Version bumped to 1.2.0
+
+### Fixed
+- `history[-1].artifact` in design.md → `history[1].artifact` (correct index for requirements)
+
+### Removed
+- Kiro and Antigravity IDE adapter support (low adoption)
+- IDE auto-detection and adapter generation from install.sh — users now configure their IDE manually (see README)
+- `--ide`, `--all-ides` flags from install.sh
+- `.cursor/rules/spec-driven-dev.mdc` from repository
+
 ## [1.1.0] - 2026-03-19
 
 ### Added
@@ -45,5 +69,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 3-phase pipeline: Requirements → Design → Implementation
 - POSIX shell state machine (pipeline.sh)
 - Phase templates: requirements.md, design.md, implementation.md
-- IDE adapters: Cursor, Windsurf, Claude Code, VSCode Copilot, Kiro, Antigravity
+- IDE adapters: Cursor, Windsurf, Claude Code, VSCode Copilot
 - Installer script with IDE auto-detection

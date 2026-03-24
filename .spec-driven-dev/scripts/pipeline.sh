@@ -24,7 +24,7 @@ HISTORY_DIR="$STATE_DIR/archive"
 
 # --- helpers ---
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 info() { echo "→ $*"; }
@@ -75,19 +75,23 @@ pipeline_active() {
 
 next_phase() {
   case "$1" in
-    requirements) echo "design" ;;
-    design)       echo "implementation" ;;
-    implementation) echo "done" ;;
-    done)         echo "" ;;
-    *)            echo "" ;;
+    explore)        echo "requirements" ;;
+    requirements)   echo "design" ;;
+    design)         echo "implementation" ;;
+    implementation) echo "verify" ;;
+    verify)         echo "done" ;;
+    done)           echo "" ;;
+    *)              echo "" ;;
   esac
 }
 
 phase_number() {
   case "$1" in
-    requirements)   echo "1" ;;
-    design)         echo "2" ;;
-    implementation) echo "3" ;;
+    explore)        echo "1" ;;
+    requirements)   echo "2" ;;
+    design)         echo "3" ;;
+    implementation) echo "4" ;;
+    verify)         echo "5" ;;
     done)           echo "✓" ;;
     *)              echo "?" ;;
   esac
@@ -167,7 +171,7 @@ cmd_init() {
   # Initialize KV store
   cat > "$STATE_DIR/pipeline.kv" <<EOF
 feature=$feature
-phase=requirements
+phase=explore
 created_at=$(iso_now)
 current_artifact=
 history_count=0
@@ -175,8 +179,8 @@ EOF
 
   rebuild_json
   info "Pipeline initialized for '$feature'"
-  info "Phase: [1/3] requirements"
-  info "Read template: .spec-driven-dev/templates/requirements.md"
+  info "Phase: [1/5] explore"
+  info "Read template: .spec-driven-dev/templates/explore.md"
 }
 
 cmd_status() {
@@ -196,7 +200,7 @@ cmd_status() {
   echo ""
   echo "┌─────────────────────────────────────────────┐"
   printf "│ Feature: %-35s│\n" "$feature"
-  printf "│ Phase:   [%s/3] %-30s│\n" "$(phase_number "$phase")" "$phase"
+  printf "│ Phase:   [%s/5] %-30s│\n" "$(phase_number "$phase")" "$phase"
   if [ -n "$artifact" ]; then
     printf "│ Artifact: %-34s│\n" "$artifact"
   else
@@ -205,14 +209,16 @@ cmd_status() {
   echo "├─────────────────────────────────────────────┤"
 
   # Show pipeline progress
-  local r_mark="○" d_mark="○" i_mark="○"
+  local e_mark="○" r_mark="○" d_mark="○" i_mark="○" v_mark="○"
   case "$phase" in
-    requirements)   r_mark="●" ;;
-    design)         r_mark="✓"; d_mark="●" ;;
-    implementation) r_mark="✓"; d_mark="✓"; i_mark="●" ;;
-    done)           r_mark="✓"; d_mark="✓"; i_mark="✓" ;;
+    explore)        e_mark="●" ;;
+    requirements)   e_mark="✓"; r_mark="●" ;;
+    design)         e_mark="✓"; r_mark="✓"; d_mark="●" ;;
+    implementation) e_mark="✓"; r_mark="✓"; d_mark="✓"; i_mark="●" ;;
+    verify)         e_mark="✓"; r_mark="✓"; d_mark="✓"; i_mark="✓"; v_mark="●" ;;
+    done)           e_mark="✓"; r_mark="✓"; d_mark="✓"; i_mark="✓"; v_mark="✓" ;;
   esac
-  printf "│ %s Requirements → %s Design → %s Implementation │\n" "$r_mark" "$d_mark" "$i_mark"
+  printf "│ %s Exp → %s Req → %s Des → %s Impl → %s Ver  │\n" "$e_mark" "$r_mark" "$d_mark" "$i_mark" "$v_mark"
   echo "└─────────────────────────────────────────────┘"
 
   # Show history
@@ -277,7 +283,10 @@ cmd_approve() {
   [ -z "$history_count" ] && history_count=0
 
   [ "$phase" = "done" ] && die "Pipeline already complete."
-  [ -z "$artifact" ] && die "No artifact registered for phase '$phase'. Run 'pipeline.sh artifact <path>' first."
+  # Verify phase has no artifact (output is chat-only)
+  if [ "$phase" != "verify" ]; then
+    [ -z "$artifact" ] && die "No artifact registered for phase '$phase'. Run 'pipeline.sh artifact <path>' first."
+  fi
 
   # Record in history
   write_field "history_${history_count}_phase" "$phase"
@@ -310,7 +319,7 @@ cmd_approve() {
     info "Run 'pipeline.sh reset' when ready for a new feature."
   else
     info "Phase '$phase' approved."
-    info "Advanced to: [$(phase_number "$next")/3] $next"
+    info "Advanced to: [$(phase_number "$next")/5] $next"
     info "Read template: .spec-driven-dev/templates/${next}.md"
   fi
 }
@@ -466,15 +475,20 @@ cmd_help() {
   echo ""
   echo "Workflow:"
   echo "  1. init my-feature"
-  echo "  2. (agent reads templates/requirements.md, generates doc)"
-  echo "  3. artifact state/requirements.md"
+  echo "  2. (agent reads templates/explore.md, investigates)"
+  echo "  3. artifact state/explore.md"
   echo "  4. approve  ← user confirms"
-  echo "  5. (agent reads templates/design.md, generates doc)"
-  echo "  6. artifact state/design.md"
+  echo "  5. (agent reads templates/requirements.md, generates doc)"
+  echo "  6. artifact state/requirements.md"
   echo "  7. approve  ← user confirms"
-  echo "  8. (agent reads templates/implementation.md, generates plan)"
-  echo "  9. artifact state/implementation.md"
-  echo " 10. approve  ← user confirms → done!"
+  echo "  8. (agent reads templates/design.md, generates doc)"
+  echo "  9. artifact state/design.md"
+  echo " 10. approve  ← user confirms"
+  echo " 11. (agent reads templates/implementation.md, generates plan)"
+  echo " 12. artifact state/implementation.md"
+  echo " 13. approve  ← user confirms"
+  echo " 14. (agent reads templates/verify.md, validates implementation)"
+  echo " 15. approve  ← user confirms → done!"
 }
 
 # --- main ---

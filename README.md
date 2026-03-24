@@ -1,9 +1,9 @@
 # Spec-Driven Dev
 
-A universal skill package for AI coding assistants that enforces a 3-phase development pipeline:
+A universal skill package for AI coding assistants that enforces a 5-phase development pipeline:
 
 ```
-Requirements → [APPROVE] → Design → [APPROVE] → Implementation
+Explore → [APPROVE] → Requirements → [APPROVE] → Design → [APPROVE] → Implementation → [APPROVE] → Verify → Done
 ```
 
 No API keys. No dependencies. Works in any IDE with AI agent support.
@@ -13,9 +13,11 @@ No API keys. No dependencies. Works in any IDE with AI agent support.
 AI coding assistants are great at writing code, but they often skip the thinking phase. They jump straight to implementation without understanding what needs to be built, why, or what the constraints are.
 
 Spec-Driven Dev forces a structured workflow:
-1. **Requirements** — interview the user, capture WHAT needs to be done
-2. **Design** — architect HOW to do it, define correctness properties
-3. **Implementation** — create a TDD plan with traceability to requirements
+1. **Explore** — investigate the problem space, compare approaches
+2. **Requirements** — interview the user, capture WHAT needs to be done
+3. **Design** — architect HOW to do it, define correctness properties
+4. **Implementation** — create a TDD plan with traceability to requirements
+5. **Verify** — validate that implementation matches specs
 
 Each phase produces a document. Each transition requires explicit human approval. No skipping.
 
@@ -25,12 +27,7 @@ Install into your project with a single command:
 
 ```bash
 cd /path/to/your/project
-
-# Auto-detect IDEs (installs adapters only for IDEs found in your project)
 curl -fsSL https://raw.githubusercontent.com/sipki-tech/spec-driven-developer-skill/main/install.sh | sh
-
-# Or specify IDEs explicitly
-curl -fsSL https://raw.githubusercontent.com/sipki-tech/spec-driven-developer-skill/main/install.sh | sh -s -- --ide cursor,copilot
 ```
 
 <details>
@@ -39,74 +36,91 @@ curl -fsSL https://raw.githubusercontent.com/sipki-tech/spec-driven-developer-sk
 ```bash
 git clone https://github.com/sipki-tech/spec-driven-developer-skill.git /tmp/sdd
 cd /path/to/your/project
-sh /tmp/sdd/install.sh --ide cursor
+sh /tmp/sdd/install.sh
 ```
 </details>
-
-### Supported `--ide` values
-
-| Value | IDE | Adapter File |
-|-------|-----|-------------|
-| `cursor` | Cursor | `.cursor/rules/spec-driven-dev.mdc` |
-| `windsurf` | Windsurf | `.windsurfrules` |
-| `claude` / `opencode` | Claude Code / Open Code | `CLAUDE.md` |
-| `copilot` | VSCode Copilot | `.github/copilot-instructions.md` |
-| `kiro` | Kiro | `.kiro/specs/spec-driven-dev.md` |
-| `antigravity` | Antigravity | `.antigravity/agents.yaml` |
 
 ### Installer flags
 
 | Flag | Description |
 |------|-------------|
-| `--ide cursor,copilot,...` | Install adapters only for specified IDEs |
-| `--all-ides` | Install adapters for all supported IDEs |
-| `--update` | Refresh core files, preserve state/ and existing adapters |
-| `--uninstall` | Remove core files and adapters |
+| `--update` | Refresh core files, preserve state/ |
+| `--uninstall` | Remove core files |
+
+### IDE Setup
+
+After installing, point your AI assistant at the skill. Add these lines to your IDE’s instruction file:
+
+```
+Read and follow `.spec-driven-dev/skill.md` for all feature development.
+Before starting any feature, run: `sh .spec-driven-dev/scripts/pipeline.sh status`
+```
+
+| IDE | Where to add |
+|-----|-------------|
+| **Cursor** | `.cursor/rules/spec-driven-dev.mdc` (with YAML frontmatter) |
+| **Windsurf** | `.windsurfrules` |
+| **Claude Code** | `CLAUDE.md` |
+| **VSCode Copilot** | `.github/copilot-instructions.md` |
 
 Then tell your AI assistant:
 
 > "I want to add user authentication with OAuth2"
 
-The agent will automatically pick up the pipeline and start with the requirements interview.
-
-## Supported IDEs
-
-| IDE | Adapter File | Shell | Status |
-|-----|-------------|-------|--------|
-| **Cursor** | `.cursor/rules/spec-driven-dev.mdc` | ✅ | Full support |
-| **Windsurf** | `.windsurfrules` | ✅ | Full support |
-| **Claude Code** | `CLAUDE.md` | ✅ | Full support |
-| **Kiro** | `.kiro/specs/spec-driven-dev.md` | ✅ | Native specs support |
-| **Antigravity** | `.antigravity/agents.yaml` | ✅ | Native agents |
-| **VSCode Copilot** | `.github/copilot-instructions.md` | ⚠️ | Limited (no shell) |
-
-> VSCode Copilot can read the instructions but may not execute shell commands. The agent can read `state/pipeline.json` directly as a fallback.
+The agent will automatically pick up the pipeline and start with the exploration phase.
 
 ## How It Works
+
+### Project Configuration
+
+Customize AI behavior for your project by editing `.spec-driven-dev/config.yaml`:
+
+```yaml
+# .spec-driven-dev/config.yaml
+
+context: |
+  Tech stack: Go 1.23, PostgreSQL, gRPC
+  Testing: go test, testify
+  Build: make build
+  Lint: golangci-lint run
+  Repo structure: cmd/, internal/, pkg/, api/
+
+rules:
+  explore:
+    - Focus on existing API surface before proposing new endpoints
+  requirements:
+    - All REQ should use gRPC error codes, not HTTP statuses
+  design:
+    - ADR must consider protobuf backward compatibility
+  implementation:
+    - Test command: go test ./...
+    - Build command: make build
+  verify:
+    - Check that all gRPC error codes are tested
+```
+
+- **`context`** is injected into ALL phases — the agent knows your stack before asking questions.
+- **`rules.<phase>`** adds phase-specific rules on top of the template defaults.
+- The file is created as a commented-out starter on install. Fully opt-in.
 
 ### File Structure
 
 ```
 .spec-driven-dev/                    ← shared core (IDE-agnostic)
-├── skill.md                         ← orchestrator (~60 lines)
+├── config.yaml                      ← project context & rules (opt-in)
+├── skill.md                         ← orchestrator
 ├── templates/
-│   ├── requirements.md              ← phase 1 prompt
-│   ├── design.md                    ← phase 2 prompt
-│   └── implementation.md            ← phase 3 prompt
+│   ├── explore.md                   ← phase 1 prompt
+│   ├── requirements.md              ← phase 2 prompt
+│   ├── design.md                    ← phase 3 prompt
+│   ├── implementation.md            ← phase 4 prompt
+│   └── verify.md                    ← phase 5 prompt
 ├── scripts/
 │   └── pipeline.sh                  ← state machine (POSIX sh, zero deps)
 └── state/                           ← runtime (gitignored)
     ├── pipeline.json                ← current state for agents
     ├── pipeline.kv                  ← internal KV store
     └── archive/                     ← archived pipelines
-
-# IDE adapters (thin pointers to the core)
-.cursor/rules/spec-driven-dev.mdc
-.windsurfrules
-CLAUDE.md
-.github/copilot-instructions.md
-.kiro/specs/spec-driven-dev.md
-.antigravity/agents.yaml
 ```
 
 ### Pipeline Commands
@@ -145,8 +159,18 @@ sh .spec-driven-dev/scripts/pipeline.sh version
 You: "I want to add gRPC streaming to my service"
 
 Agent: [reads skill.md → runs pipeline.sh init grpc-streaming]
+Agent: [reads templates/explore.md → investigates codebase]
+Agent: "Let me explore the problem space first. I see you currently use
+        unary gRPC calls in service X. Here are 3 approaches:
+        1. Server streaming  2. Bidirectional  3. SSE fallback
+        I recommend #1 because..."
+Agent: "Exploration document ready. Approve?"
+
+You: "Approve"
+
+Agent: [runs pipeline.sh approve → advances to requirements]
 Agent: [reads templates/requirements.md → starts interview]
-Agent: "Let me understand the requirements. First, some questions:
+Agent: "Now let me capture the formal requirements.
         1. Which service is this for?
         2. What's the current communication pattern?
         3. Who are the consumers of this API?"
@@ -159,29 +183,46 @@ Agent: "Requirements document is ready. Approve?"
 You: "Approve"
 
 Agent: [runs pipeline.sh approve → advances to design]
-Agent: [reads templates/design.md + requirements artifact]
+Agent: [reads templates/design.md + prior artifacts]
 Agent: [generates design document with architecture, correctness properties]
 Agent: "Design document is ready. Approve?"
 
 You: "Approve"
 
 Agent: [runs pipeline.sh approve → advances to implementation]
-Agent: [reads templates/implementation.md + both artifacts]
+Agent: [reads templates/implementation.md + all prior artifacts]
 Agent: [generates TDD implementation plan]
 Agent: "Implementation plan is ready. Approve?"
 
 You: "Approve"
 
+Agent: [runs pipeline.sh approve → advances to verify]
+Agent: [reads templates/verify.md + all 4 artifacts + actual code]
+Agent: "Verification Report:
+        ✓ REQ-1: streaming endpoint — implemented in service.go
+        ✓ REQ-2: backpressure handling — implemented in stream.go
+        ⚠ REQ-3: reconnection — partially implemented, missing retry logic
+        Coverage: 2/3 fully implemented. Recommendation: fix REQ-3 before approval."
+
+You: "Approve" (or rollback to fix issues)
+
 Agent: [runs pipeline.sh approve → done]
-       "Pipeline complete! Artifacts:
-        1. state/grpc-streaming-requirements.md
-        2. state/grpc-streaming-design.md
-        3. state/grpc-streaming-implementation.md"
+       "Pipeline complete!"
 ```
 
 ## Phase Details
 
-### Phase 1: Requirements
+### Phase 2: Explore
+
+The agent investigates the problem space before committing to requirements:
+- Reads existing codebase to understand current state
+- Identifies constraints, risks, and dependencies
+- Compares 2–4 realistic approaches with trade-offs
+- Recommends a direction with suggested scope boundaries
+
+Output: exploration document with Intent, Investigation, Options, Constraints, and Recommended Direction.
+
+### Phase 2: Requirements
 
 The agent conducts a structured interview through 4 layers:
 1. **Context & Motivation** — what, why, who's affected
@@ -191,7 +232,7 @@ The agent conducts a structured interview through 4 layers:
 
 Output: formal requirements document using **WHEN/SHALL grammar** — each requirement is atomic and verifiable.
 
-### Phase 2: Design
+### Phase 3: Design
 
 Takes the requirements document and produces:
 - **Architecture** with Mermaid diagrams (color-coded: new/modified/existing)
@@ -200,7 +241,7 @@ Takes the requirements document and produces:
 - **Correctness Properties** — formal "For all X, Y must hold" statements
 - **Testing Strategy** — unit tests + property-based tests
 
-### Phase 3: Implementation
+### Phase 4: Implementation
 
 Takes both documents and produces a **TDD implementation plan**:
 - Exploration tests (RED) — prove the problem exists
@@ -210,6 +251,15 @@ Takes both documents and produces a **TDD implementation plan**:
 - Checkpoints — integration verification
 
 Every task is traceable: `Requirements X.Y → Task N → Correctness Property K`.
+
+### Phase 5: Verify
+
+Reads all prior artifacts and the actual codebase, then validates three dimensions:
+- **Completeness** — every requirement has corresponding code and tests
+- **Correctness** — implementation matches design intent, edge cases handled
+- **Coherence** — code structure reflects design decisions, naming is consistent
+
+Output: verification report presented in chat (no saved file). Issues are marked ✓/⚠/✗.
 
 ## Updating
 

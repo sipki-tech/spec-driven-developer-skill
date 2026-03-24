@@ -1,12 +1,12 @@
 # Spec-Driven Development
 
 You are operating in **spec-driven development mode**.
-This project uses a 3-phase pipeline with human approval gates between each phase.
+This project uses a 5-phase pipeline with human approval gates between each phase.
 
 ## Pipeline
 
 ```
-Requirements → [APPROVE] → Design → [APPROVE] → Implementation → [APPROVE] → Done
+Explore → [APPROVE] → Requirements → [APPROVE] → Design → [APPROVE] → Implementation → [APPROVE] → Verify → Done
 ```
 
 Each phase has a dedicated prompt template. Read the template for the **current** phase before generating any output.
@@ -15,9 +15,11 @@ Each phase has a dedicated prompt template. Read the template for the **current*
 
 | # | Phase          | Template                                        | Produces                        |
 |---|----------------|-------------------------------------------------|---------------------------------|
-| 1 | Requirements   | `.spec-driven-dev/templates/requirements.md`    | Formal requirements document    |
-| 2 | Design         | `.spec-driven-dev/templates/design.md`          | Architecture & design document  |
-| 3 | Implementation | `.spec-driven-dev/templates/implementation.md`  | TDD implementation plan         |
+| 1 | Explore        | `.spec-driven-dev/templates/explore.md`         | Exploration & research document |
+| 2 | Requirements   | `.spec-driven-dev/templates/requirements.md`    | Formal requirements document    |
+| 3 | Design         | `.spec-driven-dev/templates/design.md`          | Architecture & design document  |
+| 4 | Implementation | `.spec-driven-dev/templates/implementation.md`  | TDD implementation plan         |
+| 5 | Verify         | `.spec-driven-dev/templates/verify.md`          | Verification report (chat only) |
 
 ## State Machine
 
@@ -46,15 +48,26 @@ sh .spec-driven-dev/scripts/pipeline.sh history
 sh .spec-driven-dev/scripts/pipeline.sh reset
 ```
 
+## Project Configuration
+
+If the file `.spec-driven-dev/config.yaml` exists, read it before starting any phase.
+
+- **`context`** — project-wide background (tech stack, conventions, repo structure). Treat as extra context for ALL phases.
+- **`rules.<phase>`** — phase-specific rules that supplement (not replace) the template instructions.
+
+Injection order: **context → phase rules → template instructions.**
+
+If the file does not exist, skip this step.
+
 ## Rules
 
 1. **Always check status first.** Run `pipeline.sh status` before doing anything.
-2. **Never skip phases.** Follow the order: requirements → design → implementation.
+2. **Never skip phases.** Follow the order: explore → requirements → design → implementation → verify.
 3. **Never auto-approve.** Wait for the user to explicitly say "approve" or equivalent.
 4. **Read the template.** Before generating output for a phase, read the corresponding template file.
-5. **Save artifacts.** Save generated documents to `.spec-driven-dev/state/` and register them with `pipeline.sh artifact`.
-6. **Each phase produces one artifact** that becomes input for the next phase.
-7. **Artifacts are cumulative.** The design phase reads the requirements artifact. The implementation phase reads both.
+5. **Save artifacts.** Save generated documents to `.spec-driven-dev/state/` and register them with `pipeline.sh artifact`. Exception: verify phase outputs to chat only (no saved artifact).
+6. **Each phase produces one artifact** that becomes input for the next phase (except verify).
+7. **Artifacts are cumulative.** Each phase reads all prior artifacts.
 
 ## Error Recovery
 
@@ -67,12 +80,15 @@ sh .spec-driven-dev/scripts/pipeline.sh reset
 When the user says something like "I want to add feature X":
 
 1. Run `pipeline.sh status` — if no active pipeline, run `pipeline.sh init <feature-name>`
-2. Read `templates/requirements.md` — follow its interview process
-3. Generate the requirements document → save to `state/<feature>-requirements.md`
-4. Run `pipeline.sh artifact state/<feature>-requirements.md`
+2. Read `templates/explore.md` — investigate the problem space
+3. Generate the exploration document → save to `state/<feature>-explore.md`
+4. Run `pipeline.sh artifact state/<feature>-explore.md`
 5. Present to user → wait for "approve"
-6. Run `pipeline.sh approve` → phase advances to design
-7. Read `templates/design.md` → read the requirements artifact from history
-8. Generate the design document → save, register artifact, present, wait for approve
-9. Repeat for implementation phase
-10. Pipeline complete — user has requirements + design + implementation plan
+6. Run `pipeline.sh approve` → phase advances to requirements
+7. Read `templates/requirements.md` → follow its interview process
+8. Generate the requirements document → save, register artifact, present, wait for approve
+9. Repeat for design and implementation phases
+10. After implementation is approved → phase advances to verify
+11. Read `templates/verify.md` → validate implementation against all prior artifacts
+12. Present verification report in chat → wait for "approve"
+13. Run `pipeline.sh approve` → pipeline complete
