@@ -212,7 +212,7 @@ Agent: [runs pipeline.sh approve → done]
 
 ## Phase Details
 
-### Phase 2: Explore
+### Phase 1: Explore
 
 The agent investigates the problem space before committing to requirements:
 - Reads existing codebase to understand current state
