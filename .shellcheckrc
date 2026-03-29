@@ -1,0 +1,3 @@
+# 'local' is not strictly POSIX but is supported by all target shells
+# (bash, dash, ash, zsh). See pipeline.sh line 5.
+disable=SC3043

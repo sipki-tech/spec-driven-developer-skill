@@ -14,13 +14,13 @@ You **explore**: ask questions, read code, compare options, surface constraints 
 
 Before starting, check the current pipeline state:
 ```
-sh .spec-driven-dev/scripts/pipeline.sh status
+sh ./scripts/pipeline.sh status
 ```
 
 After the user approves the exploration document:
 1. Save the document to `.spec-driven-dev/state/<feature-name>-explore.md`
-2. Register: `sh .spec-driven-dev/scripts/pipeline.sh artifact .spec-driven-dev/state/<feature-name>-explore.md`
-3. Wait for user to confirm, then: `sh .spec-driven-dev/scripts/pipeline.sh approve`
+2. Register: `sh ./scripts/pipeline.sh artifact .spec-driven-dev/state/<feature-name>-explore.md`
+3. Wait for user to confirm, then: `sh ./scripts/pipeline.sh approve`
 
 ---
 
@@ -49,6 +49,8 @@ Ask the user:
 Without waiting for all answers:
 - Read relevant source code, configs, and tests
 - Identify existing patterns, conventions, and constraints
+
+**Budget:** Limit initial investigation to ~20 file reads. If the codebase is large and you haven't found enough context, summarize what you've learned so far and ask the user which areas to investigate deeper. This prevents context window exhaustion.
 - Find related functionality that might be affected
 - Note technical debt or risks in the affected area
 
@@ -82,6 +84,7 @@ Proactively identify:
 Based on investigation, suggest:
 - Which approach seems best and why
 - What questions remain unanswered
+- **What assumptions your recommendation depends on** — list them explicitly and ask the user to confirm or correct before proceeding
 
 **Scope Boundaries** — explicitly categorize:
 - **Must-have (v1):** essential for the feature to be useful
@@ -120,8 +123,8 @@ Which option and why.
 - **Deferred (v2):** ...
 - **Needs spike:** ...
 
-## Open Questions
-What still needs clarification before requirements.
+## Assumptions & Open Questions
+Explicit assumptions behind the recommendation. Open questions that need clarification before requirements.
 ```
 
 ---
@@ -133,6 +136,7 @@ Before presenting to the user:
 - [ ] At least 2 options were considered (unless truly only one path exists)
 - [ ] Trade-offs are explicit, not hidden
 - [ ] Scope boundaries are suggested
+- [ ] Assumptions behind the recommendation are stated explicitly
 - [ ] Open questions are listed (if any)
 
 ## Antipatterns

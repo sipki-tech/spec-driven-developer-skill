@@ -15,9 +15,7 @@ jobs:
       - name: Install ShellCheck
         run: sudo apt-get install -y shellcheck
       - name: Lint pipeline.sh
-        run: shellcheck -s sh .spec-driven-dev/scripts/pipeline.sh
-      - name: Lint install.sh
-        run: shellcheck -s sh install.sh
+        run: shellcheck -s sh skills/spec-driven-dev/scripts/pipeline.sh
 
   integration:
     name: Integration (${{ matrix.shell }} on ${{ matrix.os }})
@@ -40,7 +38,8 @@ jobs:
         shell: ${{ matrix.shell }} {0}
         run: |
           set -e
-          P=".spec-driven-dev/scripts/pipeline.sh"
+          P="skills/spec-driven-dev/scripts/pipeline.sh"
+          STATE=".spec-driven-dev/state"
 
           echo "=== Test: help ==="
           sh "$P" help
@@ -55,7 +54,9 @@ jobs:
           sh "$P" status
 
           echo "=== Test: artifact ==="
-          sh "$P" artifact state/test-requirements.md
+          mkdir -p "$STATE"
+          echo "test" > "$STATE/test-explore.md"
+          sh "$P" artifact "$STATE/test-explore.md"
 
           echo "=== Test: status after artifact ==="
           sh "$P" status
@@ -66,16 +67,25 @@ jobs:
           echo "=== Test: status after approve ==="
           sh "$P" status
 
+          echo "=== Test: artifact (requirements) ==="
+          echo "test" > "$STATE/test-requirements.md"
+          sh "$P" artifact "$STATE/test-requirements.md"
+
+          echo "=== Test: approve (requirements) ==="
+          sh "$P" approve
+
           echo "=== Test: artifact (design) ==="
-          sh "$P" artifact state/test-design.md
+          echo "test" > "$STATE/test-design.md"
+          sh "$P" artifact "$STATE/test-design.md"
 
           echo "=== Test: approve (design) ==="
           sh "$P" approve
 
           echo "=== Test: artifact (impl) ==="
-          sh "$P" artifact state/test-impl.md
+          echo "test" > "$STATE/test-impl.md"
+          sh "$P" artifact "$STATE/test-impl.md"
 
-          echo "=== Test: approve (impl → done) ==="
+          echo "=== Test: approve (impl) ==="
           sh "$P" approve
 
           echo "=== Test: status (done) ==="
@@ -96,10 +106,17 @@ jobs:
           fi
           echo "PASS: path traversal correctly rejected"
 
+          echo "=== Test: nonexistent file rejected ==="
+          if sh "$P" artifact "nonexistent-file.md" 2>/dev/null; then
+            echo "FAIL: nonexistent file was not rejected"
+            exit 1
+          fi
+          echo "PASS: nonexistent file correctly rejected"
+
           echo "=== Test: JSON validity ==="
           sh "$P" init json-test
-          sh "$P" artifact "state/test.md"
-          # Check JSON is parseable (python is available on both runners)
+          echo "test" > "$STATE/test.md"
+          sh "$P" artifact "$STATE/test.md"
           python3 -c "import json; json.load(open('.spec-driven-dev/state/pipeline.json'))"
           echo "PASS: pipeline.json is valid JSON"
 

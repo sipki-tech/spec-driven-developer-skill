@@ -10,14 +10,14 @@
 
 Before starting, check the current pipeline state:
 ```
-sh .spec-driven-dev/scripts/pipeline.sh status
+sh ./scripts/pipeline.sh status
 ```
 The exploration document path is in `history[0].artifact` (or shown in status output under completed phases). Read it for context on what was investigated.
 
 After the user approves the requirements document:
 1. Save the document to `.spec-driven-dev/state/<feature-name>-requirements.md`
-2. Register the artifact: `sh .spec-driven-dev/scripts/pipeline.sh artifact .spec-driven-dev/state/<feature-name>-requirements.md`
-3. Wait for user to confirm, then: `sh .spec-driven-dev/scripts/pipeline.sh approve`
+2. Register the artifact: `sh ./scripts/pipeline.sh artifact .spec-driven-dev/state/<feature-name>-requirements.md`
+3. Wait for user to confirm, then: `sh ./scripts/pipeline.sh approve`
 
 ---
 

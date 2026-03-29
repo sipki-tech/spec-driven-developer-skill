@@ -12,7 +12,7 @@ You do **NOT** write code. You do **NOT** design architecture. You create a sequ
 
 Before starting, read ALL approved input documents:
 ```
-sh .spec-driven-dev/scripts/pipeline.sh status
+sh ./scripts/pipeline.sh status
 ```
 From the status output / pipeline.json:
 - `history[0].artifact` → exploration document
@@ -23,8 +23,8 @@ Read all documents before generating the implementation plan.
 
 After the user approves the implementation plan:
 1. Save the plan to `.spec-driven-dev/state/<feature-name>-implementation.md`
-2. Register: `sh .spec-driven-dev/scripts/pipeline.sh artifact .spec-driven-dev/state/<feature-name>-implementation.md`
-3. Wait for user to confirm, then: `sh .spec-driven-dev/scripts/pipeline.sh approve`
+2. Register: `sh ./scripts/pipeline.sh artifact .spec-driven-dev/state/<feature-name>-implementation.md`
+3. Wait for user to confirm, then: `sh ./scripts/pipeline.sh approve`
 
 ---
 
@@ -56,7 +56,7 @@ Before generating any tasks, analyze both input documents:
 
    Every requirement must appear at least once. Every correctness property must be linked to at least one task.
 
-4. **Determine the work type** — classify the work before planning:
+4. **Determine the work type** — classify the work before planning. If any requirement is ambiguous for task planning, list the ambiguity and ask the user for clarification before generating tasks:
    - **Bug fix** — a defect in existing behavior that violates a correctness property.
    - **Pure feature** — new behavior with no prior implementation to preserve.
    - **Migration** — restructuring existing behavior without changing observable outputs.
@@ -67,7 +67,7 @@ The work type determines the task order (see Task Order Rules below).
 - If requirements describe **existing behavior that is incorrect** or violates a correctness property → **Bug fix**.
 - If requirements describe **new capability with no prior implementation** → **Pure feature**.
 - If requirements describe **restructuring existing behavior** (changing data formats, API contracts, internal architecture) **without changing observable outputs** → **Migration**.
-- If unsure, default to **Pure feature** — it is the safest task order.
+- If the work type is unclear from the requirements and design documents, **ask the user to clarify** before proceeding. Do not silently default.
 
 ---
 

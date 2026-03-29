@@ -17,14 +17,14 @@
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-STATE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/state"
+PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+STATE_DIR="$PROJECT_ROOT/.spec-driven-dev/state"
 STATE_FILE="$STATE_DIR/pipeline.json"
 HISTORY_DIR="$STATE_DIR/archive"
 
 # --- helpers ---
 
-VERSION="1.2.0"
+VERSION="1.3.0"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 info() { echo "→ $*"; }
@@ -38,9 +38,13 @@ iso_now_compact() {
   date -u +"%Y-%m-%dT%H-%M-%SZ" 2>/dev/null || date +"%Y-%m-%dT%H-%M-%SZ"
 }
 
-# Escape a string for safe embedding in JSON values
+# Escape a string for safe embedding in JSON values (RFC 8259)
 json_escape() {
-  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/	/\\t/g' | tr '\n' ' '
+  printf '%s' "$1" | sed \
+    -e 's/\\/\\\\/g' \
+    -e 's/"/\\"/g' \
+    -e 's/	/\\t/g' \
+    -e 's/\r/\\r/g' | tr '\n' ' '
 }
 
 ensure_state_dir() {
@@ -78,8 +82,7 @@ next_phase() {
     explore)        echo "requirements" ;;
     requirements)   echo "design" ;;
     design)         echo "implementation" ;;
-    implementation) echo "verify" ;;
-    verify)         echo "done" ;;
+    implementation) echo "done" ;;
     done)           echo "" ;;
     *)              echo "" ;;
   esac
@@ -91,7 +94,6 @@ phase_number() {
     requirements)   echo "2" ;;
     design)         echo "3" ;;
     implementation) echo "4" ;;
-    verify)         echo "5" ;;
     done)           echo "✓" ;;
     *)              echo "?" ;;
   esac
@@ -179,8 +181,8 @@ EOF
 
   rebuild_json
   info "Pipeline initialized for '$feature'"
-  info "Phase: [1/5] explore"
-  info "Read template: .spec-driven-dev/templates/explore.md"
+  info "Phase: [1/4] explore"
+  info "Read template: ./templates/explore.md"
 }
 
 cmd_status() {
@@ -200,7 +202,7 @@ cmd_status() {
   echo ""
   echo "┌─────────────────────────────────────────────┐"
   printf "│ Feature: %-35s│\n" "$feature"
-  printf "│ Phase:   [%s/5] %-30s│\n" "$(phase_number "$phase")" "$phase"
+  printf "│ Phase:   [%s/4] %-30s│\n" "$(phase_number "$phase")" "$phase"
   if [ -n "$artifact" ]; then
     printf "│ Artifact: %-34s│\n" "$artifact"
   else
@@ -209,16 +211,15 @@ cmd_status() {
   echo "├─────────────────────────────────────────────┤"
 
   # Show pipeline progress
-  local e_mark="○" r_mark="○" d_mark="○" i_mark="○" v_mark="○"
+  local e_mark="○" r_mark="○" d_mark="○" i_mark="○"
   case "$phase" in
     explore)        e_mark="●" ;;
     requirements)   e_mark="✓"; r_mark="●" ;;
     design)         e_mark="✓"; r_mark="✓"; d_mark="●" ;;
     implementation) e_mark="✓"; r_mark="✓"; d_mark="✓"; i_mark="●" ;;
-    verify)         e_mark="✓"; r_mark="✓"; d_mark="✓"; i_mark="✓"; v_mark="●" ;;
-    done)           e_mark="✓"; r_mark="✓"; d_mark="✓"; i_mark="✓"; v_mark="✓" ;;
+    done)           e_mark="✓"; r_mark="✓"; d_mark="✓"; i_mark="✓" ;;
   esac
-  printf "│ %s Exp → %s Req → %s Des → %s Impl → %s Ver  │\n" "$e_mark" "$r_mark" "$d_mark" "$i_mark" "$v_mark"
+  printf "│ %s Explore → %s Req → %s Design → %s Impl   │\n" "$e_mark" "$r_mark" "$d_mark" "$i_mark"
   echo "└─────────────────────────────────────────────┘"
 
   # Show history
@@ -262,6 +263,9 @@ cmd_artifact() {
     die "Artifact path must not contain control characters"
   fi
 
+  # Validate artifact file exists
+  [ -f "$path" ] || die "Artifact file does not exist: $path"
+
   pipeline_active || die "No active pipeline. Run 'pipeline.sh init <feature>' first."
 
   local phase
@@ -283,10 +287,7 @@ cmd_approve() {
   [ -z "$history_count" ] && history_count=0
 
   [ "$phase" = "done" ] && die "Pipeline already complete."
-  # Verify phase has no artifact (output is chat-only)
-  if [ "$phase" != "verify" ]; then
-    [ -z "$artifact" ] && die "No artifact registered for phase '$phase'. Run 'pipeline.sh artifact <path>' first."
-  fi
+  [ -z "$artifact" ] && die "No artifact registered for phase '$phase'. Run 'pipeline.sh artifact <path>' first."
 
   # Record in history
   write_field "history_${history_count}_phase" "$phase"
@@ -319,8 +320,8 @@ cmd_approve() {
     info "Run 'pipeline.sh reset' when ready for a new feature."
   else
     info "Phase '$phase' approved."
-    info "Advanced to: [$(phase_number "$next")/5] $next"
-    info "Read template: .spec-driven-dev/templates/${next}.md"
+    info "Advanced to: [$(phase_number "$next")/4] $next"
+    info "Read template: ./templates/${next}.md"
   fi
 }
 
@@ -486,9 +487,7 @@ cmd_help() {
   echo " 10. approve  ← user confirms"
   echo " 11. (agent reads templates/implementation.md, generates plan)"
   echo " 12. artifact state/implementation.md"
-  echo " 13. approve  ← user confirms"
-  echo " 14. (agent reads templates/verify.md, validates implementation)"
-  echo " 15. approve  ← user confirms → done!"
+  echo " 13. approve  ← user confirms → done!"
 }
 
 # --- main ---

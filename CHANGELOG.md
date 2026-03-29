@@ -5,7 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.0] - 2025-07-26
+## [1.3.0] - 2026-03-29
+
+### Changed
+- README: expanded Installation section (install options, manual install, agent targeting, verification)
+- **BREAKING**: Migrated to [skills.sh](https://skills.sh) distribution format
+- **BREAKING**: Pipeline reduced from 5 to 4 phases — Verify phase removed (implementation is the final phase)
+- Skill files moved from `.spec-driven-dev/` to `skills/spec-driven-dev/`
+- Entry point changed from `skill.md` to `SKILL.md` with YAML frontmatter
+- `pipeline.sh` STATE_DIR now resolved via `git rev-parse --show-toplevel` (project-root-based)
+- Template pipeline references use relative paths (`./scripts/pipeline.sh`)
+- Version bumped to 1.3.0
+
+### Added
+- `skills/spec-driven-dev/SKILL.md` — skills.sh-compatible orchestrator with YAML frontmatter
+- Rule 8: revision limit — after 3 rejected revisions, stop and ask for clarification
+- Rule 9: surface uncertainty — never silently assume; state assumptions and ask user to confirm
+- Exploration budget guidance (~20 file reads) in explore.md
+- Assumption surfacing in explore.md: Step 5 requires listing assumptions behind recommendation; output format includes "Assumptions & Open Questions"; quality checklist verifies assumptions are explicit
+- `[ASSUMPTION: ...]` tagging in design.md: if skipping clarification questions, mark every design assumption inline
+- "Silent assumption" antipattern in design.md
+- implementation.md: ambiguous requirements must be escalated to user before task generation
+- `.shellcheckrc` — suppresses SC3043 for `local` keyword in POSIX sh
+- Nonexistent artifact file rejection test in CI
+
+### Fixed
+- `json_escape()` now escapes `\r` (carriage return)
+- `cmd_artifact()` validates file existence before registering
+- CHANGELOG date typo (2025 → 2026)
+- README phase numbering (Phase 2 → Phase 1 for Explore)
+- CI integration tests now create artifact files before registering (required after file existence check)
+
+### Removed
+- `install.sh` — replaced by `npx skills add sipki-tech/spec-driven-developer-skill`
+- `.spec-driven-dev/` root layout — replaced by `skills/spec-driven-dev/`
+- `CLAUDE.md`, `.windsurfrules`, `.github/copilot-instructions.md` — IDE adapters no longer needed
+- `templates/verify.md` — Verify phase removed from pipeline
+- `--update` / `--uninstall` installer flags
+
+## [1.2.0] - 2026-07-26
 
 ### Added
 - **Explore phase** (phase 1) — investigate the problem space, compare approaches, recommend direction before writing requirements

@@ -12,14 +12,14 @@ You **design** the solution: architecture, interfaces, data models, correctness 
 
 Before starting, read the approved requirements document:
 ```
-sh .spec-driven-dev/scripts/pipeline.sh status
+sh ./scripts/pipeline.sh status
 ```
 The requirements document path is in `history[1].artifact` (or shown in status output under completed phases).
 
 After the user approves the design document:
 1. Save the document to `.spec-driven-dev/state/<feature-name>-design.md`
-2. Register: `sh .spec-driven-dev/scripts/pipeline.sh artifact .spec-driven-dev/state/<feature-name>-design.md`
-3. Wait for user to confirm, then: `sh .spec-driven-dev/scripts/pipeline.sh approve`
+2. Register: `sh ./scripts/pipeline.sh artifact .spec-driven-dev/state/<feature-name>-design.md`
+3. Wait for user to confirm, then: `sh ./scripts/pipeline.sh approve`
 
 ---
 
@@ -35,12 +35,12 @@ If the file does not exist, skip this step.
 
 ## Phase 1: Context Clarification (optional)
 
-Ask clarifying questions **only if**:
+Ask clarifying questions when:
 - The requirements admit multiple substantially different architectural solutions
 - You need information about the existing codebase to make sound design decisions
 - There are contradictions or ambiguities in the requirements
 
-Group 2–4 questions in a single message. Do not ask if the requirements are self-contained and unambiguous.
+Group 2–4 questions in a single message. If the requirements are self-contained and unambiguous, you may skip this step — but then label every design assumption with `[ASSUMPTION: ...]` inline where it appears, so the user can spot and correct unstated beliefs during review.
 
 ---
 
@@ -235,3 +235,4 @@ Before presenting the design document, verify:
 | Unlinked properties | "Property 3: tokens are secure" | "Property 3: ... Validates: REQ-1.2" | Every property must trace to a requirement |
 | Vague modification scope | `[MODIFIED]` — "various authentication changes" | `[MODIFIED]` — "adds refreshToken(), modifies authenticate() return type" | Must state what exactly changes |
 | Scope creep | Designing rate limiting not in requirements | Only design what requirements specify | Stay within approved requirements |
+| Silent assumption | Choosing a caching strategy without stating why | `[ASSUMPTION: write-through preferred]` — ask user or mark explicitly | Unstated beliefs cause surprises during implementation |
