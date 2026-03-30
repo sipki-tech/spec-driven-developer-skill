@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-03-30
+
+### Added
+- `## Done when` gate sections in all 4 phase templates — AI must verify every condition before suggesting approval
+- `pipeline.sh publish` command — copies approved artifacts to `.spec-driven-dev/specs/<feature>/` for version control
+
+### Changed
+- Rule 1 strengthened: "Always check status first" → "MUST check status first. Never generate phase output without checking status."
+
+### Fixed
+- Documented rollback file-content limitation in Error Recovery — rollback restores artifact path, not file contents
+
 ## [1.3.0] - 2026-03-29
 
 ### Changed

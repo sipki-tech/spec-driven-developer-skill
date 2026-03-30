@@ -297,6 +297,20 @@ Before delivering the plan, verify:
 
 ---
 
+## Done when
+
+Do NOT suggest approval until **every** condition is true:
+
+1. Coverage matrix is present with every requirement mapped to at least one task.
+2. Work type is classified: **Bug fix**, **Pure feature**, or **Migration**.
+3. Task order follows the rules for the classified work type.
+4. Every task has a `*_Requirements:_*` annotation.
+5. Every implementation task (Type 3) has a `*_Preservation:_*` annotation.
+6. Checkpoint (Type 5) is the final task in the plan.
+7. Artifact is registered via `pipeline.sh artifact <path>`.
+
+---
+
 ## Antipatterns — Never Do These
 
 | Antipattern | Why it's harmful |

@@ -240,6 +240,19 @@ Before delivering the document to the user, verify every item:
 
 ---
 
+## Done when
+
+Do NOT suggest approval until **every** condition is true:
+
+1. Every requirement uses `WHEN/SHALL` grammar with exactly one `SHALL`.
+2. Negative and error cases are covered for each functional group.
+3. Requirement numbering is continuous — no gaps in `X.Y` sequence.
+4. Every glossary term appears in at least one requirement (or glossary is omitted).
+5. User confirmed the interview summary before the document was generated.
+6. Artifact is registered via `pipeline.sh artifact <path>`.
+
+---
+
 ## Antipatterns — What This Document Must Never Contain
 
 | Antipattern | WRONG ❌ | RIGHT ✓ | Why |

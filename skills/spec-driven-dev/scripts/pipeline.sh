@@ -21,10 +21,11 @@ PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 STATE_DIR="$PROJECT_ROOT/.spec-driven-dev/state"
 STATE_FILE="$STATE_DIR/pipeline.json"
 HISTORY_DIR="$STATE_DIR/archive"
+SPECS_DIR="$PROJECT_ROOT/.spec-driven-dev/specs"
 
 # --- helpers ---
 
-VERSION="1.3.0"
+VERSION="1.4.0"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 info() { echo "→ $*"; }
@@ -454,6 +455,42 @@ cmd_rollback() {
   info "You can revise the artifact, re-register, and approve again."
 }
 
+cmd_publish() {
+  pipeline_active || die "No active pipeline."
+
+  local phase
+  phase="$(read_field phase)"
+  [ "$phase" = "done" ] || die "Pipeline is not complete (current phase: $phase). Finish all phases before publishing."
+
+  local feature history_count
+  feature="$(read_field feature)"
+  history_count="$(read_field history_count)"
+  [ -z "$history_count" ] && history_count=0
+
+  local dest="$SPECS_DIR/$feature"
+  mkdir -p "$dest"
+
+  local i=0
+  while [ "$i" -lt "$history_count" ]; do
+    local h_phase h_artifact dest_name
+    h_phase="$(read_field "history_${i}_phase")"
+    h_artifact="$(read_field "history_${i}_artifact")"
+    dest_name="$((i + 1))-${h_phase}.md"
+
+    if [ -f "$h_artifact" ]; then
+      cp "$h_artifact" "$dest/$dest_name"
+      info "Published: $dest/$dest_name"
+    else
+      warn "Artifact not found, skipped: $h_artifact"
+    fi
+    i=$((i + 1))
+  done
+
+  echo ""
+  info "Artifacts published to: $dest"
+  info "These files are outside .spec-driven-dev/state/ and can be committed to git."
+}
+
 cmd_version() {
   echo "Spec-Driven Dev Pipeline v${VERSION}"
 }
@@ -471,6 +508,7 @@ cmd_help() {
   echo "  rollback          Return to previous phase"
   echo "  history           Show completed phases and archived pipelines"
   echo "  reset             Archive current pipeline and reset"
+  echo "  publish           Copy approved artifacts to .spec-driven-dev/specs/ (committable)"
   echo "  version           Show version"
   echo "  help              Show this message"
   echo ""
@@ -502,6 +540,7 @@ case "${1:-help}" in
   rollback) cmd_rollback ;;
   history)  cmd_history ;;
   reset)    cmd_reset ;;
+  publish)  cmd_publish ;;
   version|--version|-v) cmd_version ;;
   help|--help|-h) cmd_help ;;
   *)        die "Unknown command: $1. Run 'pipeline.sh help' for usage." ;;

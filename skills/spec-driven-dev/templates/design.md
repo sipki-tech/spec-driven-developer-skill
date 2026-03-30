@@ -224,6 +224,19 @@ Before presenting the design document, verify:
 
 ---
 
+## Done when
+
+Do NOT suggest approval until **every** condition is true:
+
+1. Every requirement from the requirements document is traced to at least one correctness property.
+2. Every correctness property has a corresponding property-based test in §2.8.
+3. The "Files NOT Requiring Changes" table in §2.3 is non-empty.
+4. Mermaid diagrams use correct color coding: green (`#90EE90`) = new, yellow (`#FFD700`) = modified, default = unchanged.
+5. At least one ADR is present in §2.4.
+6. Artifact is registered via `pipeline.sh artifact <path>`.
+
+---
+
 ## Antipatterns to Avoid
 
 | Antipattern | WRONG ❌ | RIGHT ✓ | Why |

@@ -139,6 +139,17 @@ Before presenting to the user:
 - [ ] Assumptions behind the recommendation are stated explicitly
 - [ ] Open questions are listed (if any)
 
+## Done when
+
+Do NOT suggest approval until **every** condition is true:
+
+1. Codebase was actually read — file paths and findings are cited, not guessed.
+2. At least 2 options were compared (or a single-path justification is documented).
+3. Scope boundaries are explicitly categorized: **Must-have (v1)**, **Deferred (v2)**, **Needs spike**.
+4. Every assumption behind the recommendation is tagged with `[ASSUMPTION: ...]`.
+5. Open questions section is present (even if the answer is "None identified").
+6. Artifact is registered via `pipeline.sh artifact <path>`.
+
 ## Antipatterns
 
 | Antipattern | WRONG ❌ | RIGHT ✓ | Why |

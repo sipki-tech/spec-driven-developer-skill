@@ -56,6 +56,9 @@ sh ./scripts/pipeline.sh history
 
 # Archive and reset the pipeline
 sh ./scripts/pipeline.sh reset
+
+# Publish approved artifacts to committable directory
+sh ./scripts/pipeline.sh publish
 ```
 
 ## Project Configuration
@@ -71,7 +74,7 @@ If the file does not exist, skip this step.
 
 ## Rules
 
-1. **Always check status first.** Run `pipeline.sh status` before doing anything.
+1. **MUST check status first.** Run `pipeline.sh status` before doing anything. Never generate phase output without checking status.
 2. **Never skip phases.** Follow the order: explore → requirements → design → implementation.
 3. **Never auto-approve.** Wait for the user to explicitly say "approve" or equivalent.
 4. **Read the template.** Before generating output for a phase, read the corresponding template file.
@@ -84,8 +87,12 @@ If the file does not exist, skip this step.
 ## Error Recovery
 
 - **Revising an artifact:** Overwrite the file, re-register with `pipeline.sh artifact <path>`, and present the updated version to the user.
-- **Incorrect approval:** Run `pipeline.sh rollback` to return to the previous phase with the artifact restored. Revise and re-approve.
+- **Incorrect approval:** Run `pipeline.sh rollback` to return to the previous phase with the artifact restored. Revise and re-approve. Note: rollback restores the artifact *path*, not the file contents. If you overwrote the artifact file at that path, retrieve the previous version from git history.
 - **Starting over:** Run `pipeline.sh reset` followed by `pipeline.sh init <feature-name>` to begin a new pipeline.
+
+## Publishing Artifacts
+
+After the pipeline is complete (`phase=done`), run `pipeline.sh publish` to copy all approved artifacts to `.spec-driven-dev/specs/<feature>/`. These files live outside the gitignored `state/` directory and can be committed to version control, creating a persistent record of decisions for future reference.
 
 ## Quick Start (for the agent)
 
