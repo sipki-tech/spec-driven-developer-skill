@@ -67,6 +67,8 @@ If the file `.spec-driven-dev/config.yaml` exists in the project root, read it b
 
 - **`context`** — project-wide background (tech stack, conventions, repo structure). Treat as extra context for ALL phases.
 - **`rules.<phase>`** — phase-specific rules that supplement (not replace) the template instructions.
+- **`test_skill`** (optional) — name of an installed skill for test generation. If present, delegate test specification (Design §2.8) and test task creation (Implementation) to this skill. Pass Correctness Properties and Coverage Matrix as input.
+- **`test_reference`** (optional) — glob or file paths pointing to representative test files. If present, use these as the style reference for all generated tests. If absent, auto-discover adjacent tests.
 
 Injection order: **context → phase rules → template instructions.**
 

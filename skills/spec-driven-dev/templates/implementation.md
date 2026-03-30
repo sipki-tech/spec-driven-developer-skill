@@ -69,6 +69,28 @@ The work type determines the task order (see Task Order Rules below).
 - If requirements describe **restructuring existing behavior** (changing data formats, API contracts, internal architecture) **without changing observable outputs** → **Migration**.
 - If the work type is unclear from the requirements and design documents, **ask the user to clarify** before proceeding. Do not silently default.
 
+5. **Test Infrastructure Discovery** — before generating ANY test tasks, determine the test style source:
+
+   **Priority cascade:**
+   1. **Dedicated test skill** — if `.spec-driven-dev/config.yaml` contains `test_skill: <name>`, delegate test generation to that skill. Pass Correctness Properties (§2.6 from design doc) and the Coverage Matrix as input. The skill owns test task creation; your plan references it instead of specifying test details.
+   2. **Adjacent existing tests** — if `config.yaml` contains `test_reference: <paths/glob>`, use those files. Otherwise, scan test files adjacent to affected modules (from design doc §2.3 file list). Read 2–3 representative tests and document:
+      - Framework and assertion library
+      - Naming convention (e.g., `TestXxx`, `test_xxx`, `describe/it`)
+      - Structure (table-driven, subtests, fixtures, setup/teardown)
+      - Helper functions and shared utilities
+      - Mock/stub strategy
+   3. **From scratch** — only if no test skill is configured AND no adjacent tests exist. Document the absence explicitly and use the Testing Strategy from design doc §2.8 as the sole guide.
+
+   **Output:** Include a `Test Style Source` block as preamble to the implementation plan:
+
+   ```markdown
+   **Test Style Source:** Tier <1|2|3>
+   - <Evidence: skill name / reference test file paths / "no adjacent tests found">
+   - <Key patterns to follow, if Tier 2>
+   ```
+
+   All test tasks (Type 1, Type 2) MUST follow the patterns identified here.
+
 ---
 
 ## Phase 2: Implementation Plan Generation
@@ -97,6 +119,7 @@ Every task must follow this structure:
 
 - ***_Bug_Condition:_*** — for bug fix tasks: describe the condition that triggers the defect
 - ***_Expected_Behavior:_*** — for bug fix tasks: describe what correct behavior looks like
+- ***_Test_Style:_*** — for test tasks (Type 1, Type 2): reference to the test style source — either the skill name (Tier 1) or specific reference test file path (Tier 2). Omit for Tier 3.
 
 ### Instruction Keywords
 
@@ -127,6 +150,7 @@ Use these prefixes for task instructions:
 
 CRITICAL: This test MUST FAIL when run against the unmodified codebase.
 IMPORTANT: Do not fix anything yet. The test exists only to confirm the bug is reproducible.
+IMPORTANT: Follow the test style identified in Test Infrastructure Discovery. Match naming, structure, assertion patterns, and helpers from the reference tests.
 DO NOT: Write more than one test in this task. One defect = one exploration test.
 
 Instructions:
@@ -150,6 +174,7 @@ NOTE: For **pure new features** with no existing code in the affected area, Type
 *_Requirements: X.Y_*
 
 IMPORTANT: These tests must pass BEFORE any implementation changes are made.
+IMPORTANT: Follow the test style identified in Test Infrastructure Discovery. Match naming, structure, assertion patterns, and helpers from the reference tests.
 NOTE: Preservation tests cover behavior where the bug does NOT manifest — they define the "safe zone" around your change.
 DO NOT: Modify production code during this task.
 
@@ -293,6 +318,7 @@ Before delivering the plan, verify:
 - [ ] No task touches more than one file per subtask.
 - [ ] No task contains code or architecture decisions.
 - [ ] All test commands use generic placeholders (`<test command>`, `<build command>`, `<lint command>`).
+- [ ] Test Infrastructure Discovery is completed and Test Style Source block is present.
 - [ ] The coverage matrix is present and complete.
 
 ---
@@ -307,7 +333,8 @@ Do NOT suggest approval until **every** condition is true:
 4. Every task has a `*_Requirements:_*` annotation.
 5. Every implementation task (Type 3) has a `*_Preservation:_*` annotation.
 6. Checkpoint (Type 5) is the final task in the plan.
-7. Artifact is registered via `pipeline.sh artifact <path>`.
+7. Test Infrastructure Discovery is completed with Test Style Source block (tier + evidence).
+8. Artifact is registered via `pipeline.sh artifact <path>`.
 
 ---
 
@@ -323,3 +350,4 @@ Do NOT suggest approval until **every** condition is true:
 | Forgetting re-test tasks | A fix without a passing re-test is unverified |
 | Placing the checkpoint before all tasks complete | The checkpoint is a gate, not a milestone |
 | Vague task descriptions | "Update the code" is not a task. "Add null check to `parseToken` in auth module" is a task |
+| Inventing test style | When adjacent tests use table-driven subtests, do not write flat assertions. Follow existing project test patterns discovered in Test Infrastructure Discovery |

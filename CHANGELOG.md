@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-03-30
+
+### Added
+- **Test Style Cascade** — 3-tier priority system for test style discovery: (1) dedicated test skill, (2) adjacent existing tests, (3) from scratch
+- `test_skill` and `test_reference` optional fields in `config.yaml` for explicit test style overrides
+- design.md §2.8: `Test Style Source` subsection — agent must document tier selection and evidence before specifying tests
+- implementation.md Phase 1: `Test Infrastructure Discovery` step — scans adjacent tests or delegates to test skill before generating test tasks
+- implementation.md: `*_Test_Style:_*` optional field for test tasks (Type 1, Type 2)
+- explore.md Step 2: testing pattern discovery (framework, file locations, naming conventions)
+
+### Changed
+- design.md: Quality Control Checklist and Done When require Test Style Source documentation
+- implementation.md: Type 1 (Exploration Test) and Type 2 (Preservation Test) templates require following discovered test style
+- implementation.md: Quality Control Checklist and Done When require Test Infrastructure Discovery completion
+
 ## [1.4.0] - 2026-03-30
 
 ### Added

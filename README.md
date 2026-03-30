@@ -98,10 +98,16 @@ rules:
   implementation:
     - Test command: go test ./...
     - Build command: make build
+
+# Optional: test style cascade overrides
+test_skill: my-test-skill        # Tier 1: delegate test generation to this skill
+test_reference: "**/*_test.go"   # Tier 2: use these files as test style reference
 ```
 
 - **`context`** is injected into ALL phases — the agent knows your stack before asking questions.
 - **`rules.<phase>`** adds phase-specific rules on top of the template defaults.
+- **`test_skill`** (optional) — name of an installed skill for test generation. When set, Design and Implementation phases delegate test specification to this skill instead of writing test tasks directly.
+- **`test_reference`** (optional) — glob or file paths pointing to representative test files. When set, the agent uses these as the style reference for all generated tests. When omitted, the agent auto-discovers adjacent tests.
 
 ### File Structure
 

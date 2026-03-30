@@ -186,9 +186,34 @@ Cover edge cases, not just happy-path failures. Include:
 
 ### 2.8 Testing Strategy [REQUIRED]
 
-Define the tests required to verify the design. Tag each test with the feature or property it validates.
+#### Test Style Source
+
+Before specifying any tests, determine the test style source using this priority cascade:
+
+1. **Dedicated test skill** — if `.spec-driven-dev/config.yaml` contains `test_skill: <name>`, that skill owns test design. Reference it and defer test specification to it, passing Correctness Properties (§2.6) and the requirements document as input. Skip the rest of §2.8.
+2. **Adjacent existing tests** — if `.spec-driven-dev/config.yaml` contains `test_reference: <paths/glob>`, use those files. Otherwise, scan test files adjacent to affected modules (§2.3 file list). Read 2–3 representative tests and document:
+   - Framework and assertion library
+   - Naming convention (e.g., `TestXxx`, `test_xxx`, `describe/it`)
+   - Structure (table-driven, subtests, fixtures, setup/teardown)
+   - Helper functions and shared utilities
+   - Mock/stub strategy
+3. **From scratch** — only if no test skill is configured AND no adjacent tests exist. Document the absence explicitly and design the test approach based on project conventions from `config.yaml` context.
+
+**Output:** Include a `Test Style Source` block at the top of §2.8:
+
+```markdown
+**Test Style Source:** Tier <1|2|3>
+- <Evidence: skill name / reference test file paths / "no adjacent tests found">
+- <Key patterns to follow, if Tier 2>
+```
+
+All tests specified below MUST follow the patterns identified in the Test Style Source.
+
+---
 
 #### Unit Tests
+
+Define the tests required to verify the design. Tag each test with the feature or property it validates.
 
 | Test | Description | Tags |
 |------|-------------|------|
@@ -220,6 +245,7 @@ Before presenting the design document, verify:
 - [ ] The "Files NOT Requiring Changes" table in section 2.3 is filled out
 - [ ] All data types referenced in interfaces are fully defined in section 2.5 (if applicable)
 - [ ] Error handling covers edge cases and partial failure states
+- [ ] Test Style Source (§2.8) is documented with tier and evidence
 - [ ] The document is self-contained: a reader unfamiliar with prior context can understand the design
 
 ---
@@ -233,7 +259,8 @@ Do NOT suggest approval until **every** condition is true:
 3. The "Files NOT Requiring Changes" table in §2.3 is non-empty.
 4. Mermaid diagrams use correct color coding: green (`#90EE90`) = new, yellow (`#FFD700`) = modified, default = unchanged.
 5. At least one ADR is present in §2.4.
-6. Artifact is registered via `pipeline.sh artifact <path>`.
+6. Test Style Source is documented in §2.8 with tier selection and evidence.
+7. Artifact is registered via `pipeline.sh artifact <path>`.
 
 ---
 
@@ -249,3 +276,4 @@ Do NOT suggest approval until **every** condition is true:
 | Vague modification scope | `[MODIFIED]` — "various authentication changes" | `[MODIFIED]` — "adds refreshToken(), modifies authenticate() return type" | Must state what exactly changes |
 | Scope creep | Designing rate limiting not in requirements | Only design what requirements specify | Stay within approved requirements |
 | Silent assumption | Choosing a caching strategy without stating why | `[ASSUMPTION: write-through preferred]` — ask user or mark explicitly | Unstated beliefs cause surprises during implementation |
+| Ignoring existing test patterns | Agent invents new test structure (e.g., flat assertions) | Agent follows existing pattern: `auth/token_test.go:TestRefresh` uses table-driven subtests | Tests must be consistent with the project's existing style |

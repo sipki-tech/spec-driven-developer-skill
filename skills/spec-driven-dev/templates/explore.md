@@ -63,6 +63,11 @@ Without waiting for all answers:
 - What similar patterns already exist in the codebase? Follow them.
 - Are there shared abstractions (interfaces, base classes) to reuse?
 
+**Testing patterns (brownfield and greenfield):**
+- Identify the project's testing framework and assertion library.
+- Where do test files live? What naming convention is used?
+- Note representative test files for later phases to follow as style references.
+
 ### Step 3: Compare Approaches
 
 If multiple solutions exist:
