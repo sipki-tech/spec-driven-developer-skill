@@ -17,6 +17,22 @@ Read `./templates/_preamble.md` for Pipeline Integration and Project Context ins
 
 ---
 
+### Fast-track mode
+
+When the user describes a bug with a known reproduction or a small scoped change:
+
+- **Intent:** 1 paragraph (not 3–5). State the problem and the expected fix direction.
+- **Investigation:** confirm the bug exists, cite the relevant file(s) and line(s). No deep architectural survey.
+- **Options:** single recommended approach. Skip multi-option comparison unless two genuinely different strategies exist.
+- **Scope boundaries:** list only must-have (v1). Omit deferred/spike unless the user raised them.
+- **Assumptions:** 2–3 critical assumptions max.
+- **Open questions:** omit if none. Do not fabricate questions.
+- **Build Tooling:** still required (later phases depend on it).
+
+Target artifact size: **≤ 1 page**.
+
+---
+
 ## Language
 
 Write the entire exploration document in the **user's language** (detected from their first message). This includes:
@@ -176,10 +192,4 @@ Do NOT suggest approval until **every** condition is true:
 
 ## Antipatterns
 
-| Antipattern | WRONG ❌ | RIGHT ✓ | Why |
-|---|---|---|---|
-| Premature requirements | "WHEN token expires, system SHALL refresh" | "One option is to auto-refresh tokens" | WHEN/SHALL belongs in requirements phase |
-| Solution attachment | "We should use Redis" | "Option A: Redis, Option B: in-memory — trade-offs:..." | Must show alternatives before committing |
-| Ignoring existing code | "I suggest adding a new auth module" | "Existing `src/auth` uses X pattern; we can extend it" | Always read codebase first |
-| Scope creep | "We should also add rate limiting and logging" | "Rate limiting could be v2; focus on core auth first" | Help user narrow, not expand |
-| Analysis paralysis | 5 options with no recommendation | "Option B is best because...; A is fallback if..." | Recommend clearly when path is evident |
+Antipatterns for this phase: read `./templates/reference/antipatterns.md` § Explore.

@@ -13,6 +13,21 @@ Read `./templates/_preamble.md` for Pipeline Integration and Project Context ins
 
 ---
 
+### Fast-track mode
+
+When the exploration artifact indicates a small bug fix with known reproduction:
+
+- **Interview:** skip if the bug reproduction and expected behavior are already clear from exploration. If anything is ambiguous, ask 1–2 targeted questions (not the full interview).
+- **Overview:** 2–3 sentences.
+- **Requirements:** 1–2 REQs only (e.g., fix behavior + error case). Each still uses `WHEN/SHALL` format.
+- **Glossary:** omit unless a new domain term was introduced.
+- **User Stories:** omit (bug fix = no end-user role change).
+- **Topological Order:** omit.
+
+Target artifact size: **≤ 1 page**.
+
+---
+
 ## Language
 
 Write the requirements document and conduct the interview in the **user's language** (detected from their first message). This includes:
@@ -284,12 +299,4 @@ Do NOT suggest approval until **every** condition is true:
 
 ## Antipatterns — What This Document Must Never Contain
 
-| Antipattern | WRONG ❌ | RIGHT ✓ | Why |
-|---|---|---|---|
-| Architectural solution | "Use a Redis cache for token storage" | "WHEN cache miss occurs, SHALL return fresh data within 100ms" | Prescribes HOW, not WHAT |
-| Code or pseudocode | `if token.expired { refresh() }` | "WHEN token is expired, SHALL attempt refresh" | Implementation detail |
-| Diagram | Mermaid sequence diagram | Prose description of the flow | Belongs in design phase |
-| Vague wording | "The system should handle errors gracefully" | "WHEN refresh fails, SHALL return 401 with error code" | Not verifiable |
-| Combined SHALLs | "…SHALL refresh the token and log the event" | Two REQs: one for refresh, one for logging | Must be one SHALL per REQ |
-| Unconfirmed requirement | Agent adds REQ-3.1 user never mentioned | Only requirements confirmed by user in interview | Hallucinated scope |
-| Technology lock-in | "Use JWT with RS256 signing" | "WHEN issuing tokens, SHALL use cryptographic signing" | Constrains design without user mandate |
+Antipatterns for this phase: read `./templates/reference/antipatterns.md` § Requirements.

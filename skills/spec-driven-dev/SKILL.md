@@ -27,15 +27,16 @@ Each phase has a dedicated prompt template. Read the template for the **current*
 | Action | Command |
 |--------|---------|
 | Check state | `sh ./scripts/pipeline.sh status` |
-| Start feature | `sh ./scripts/pipeline.sh init <name>` |
+| Start feature | `sh ./scripts/pipeline.sh init [--branch] <name>` |
 | Register output | `sh ./scripts/pipeline.sh artifact [path]` |
 | Advance phase | `sh ./scripts/pipeline.sh approve` (only after user says "approve") |
+| Mark task done | `sh ./scripts/pipeline.sh task T-N` (implementation phase only) |
 | Check docs | `sh ./scripts/pipeline.sh docs-check` |
 | Multi-feature | Add `--feature <name>` before any command |
 
 **Hard rules:** check status first · never skip phases · never auto-approve · save artifacts to `.spec/features/<feature>/` · max 3 revisions then ask user
 
-**Config:** `.spec/config.yaml` → `context` (all phases), `rules.<phase>` (per phase), `test_skill`, `test_reference`, `docs_dir`
+**Config:** `.spec/config.yaml` → `context` (all phases), `rules.<phase>` (per phase), `test_skill`, `test_reference`, `docs_dir`, `auto_branch`, `branch_prefix`
 
 **Phase flow:** read template → generate artifact → save → `artifact` → present → wait for "approve" → `approve`
 
@@ -61,6 +62,9 @@ sh ./scripts/pipeline.sh status
 # Start a new feature pipeline
 sh ./scripts/pipeline.sh init <feature-name>
 
+# Start with auto-branch (creates git branch <prefix><name>)
+sh ./scripts/pipeline.sh init --branch <feature-name>
+
 # Register the artifact you generated for the current phase
 sh ./scripts/pipeline.sh artifact [path]
 
@@ -75,6 +79,9 @@ sh ./scripts/pipeline.sh history
 
 # Check project documentation status
 sh ./scripts/pipeline.sh docs-check
+
+# Mark an implementation task as completed (enables resume)
+sh ./scripts/pipeline.sh task <T-N>
 ```
 
 ### Parallel Pipelines
@@ -99,6 +106,8 @@ If the file `.spec/config.yaml` exists in the project root, read it before start
 - **`docs_dir`** (optional) — directory for project documentation, default: `.spec`. The agent reads documentation from this directory for project context and writes generated docs here.
 - **`doc_freshness_days`** (optional) — number of days after which a generated doc is considered stale, default: `30`. Used by `pipeline.sh docs-check` to flag outdated documentation.
 - **`rules.docs`** (optional) — rules for documentation generation, analogous to `rules.explore` etc. Example: `"Skip FILES.md — no file storage"`, `"Always include Mermaid diagrams in ARCHITECTURE.md"`.
+- **`auto_branch`** (optional) — boolean, default: `false`. When `true`, `pipeline.sh init` automatically creates a git branch `<branch_prefix><feature-name>` without needing `--branch`. Use `--no-branch` to override.
+- **`branch_prefix`** (optional) — string, default: `feature/`. Prefix for auto-created branches. Examples: `bug/`, `fix/`, `hotfix/`, or empty string for no prefix.
 
 Phase-specific rule keys: `rules.explore`, `rules.requirements`, `rules.design`, `rules.task-plan`, `rules.implementation`, `rules.review`, `rules.docs`.
 
@@ -139,7 +148,15 @@ For documentation generation, staleness checks, and regeneration workflows, read
 
 For trivial changes, just make the change directly — no pipeline needed. The skill is designed for work that **benefits from structured thinking before coding**.
 
-NOTE: For bug fixes with a known reproduction, all 6 phases still apply but each phase will be naturally shorter (exploration confirms the bug, requirements capture the fix, etc.). Do not skip phases.
+### Fast-track mode
+
+For **bug fixes with a known reproduction** or other small, well-understood changes:
+
+- All 6 phases still apply — do not skip phases.
+- Each phase produces a **minimal artifact**: 1-paragraph exploration, 1–2 requirements, focused design (CPs only for the bug scenario), 4–5 tasks (RED→GREEN→CODE→VERIFY→GATE), brief implementation report, short review.
+- Each template contains a "Fast-track mode" section with phase-specific minimums. Follow those rules when fast-track applies.
+
+**When to activate:** The agent activates fast-track when the user describes a bug with a known reproduction step, or a small, scoped change where investigation is unnecessary. At the start, announce: *"Using fast-track mode — all 6 phases, minimal artifacts."* If the user says "full pipeline", switch to the standard (non-abbreviated) flow.
 
 **Scope:** This pipeline is designed for a **single project or monorepo**. It is not intended for features that span multiple independent repositories. Within a monorepo, use one `.spec/` directory at the repository root.
 

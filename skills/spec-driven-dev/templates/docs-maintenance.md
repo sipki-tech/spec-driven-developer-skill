@@ -67,6 +67,7 @@ Templates for generating project documentation are in `./templates/docs/`. Read 
 - Each template is self-contained and generates one or more files in `<docs_dir>/`
 - **Freshness metadata**: when generating or updating any file in `<docs_dir>/`, MUST add `<!-- generated: YYYY-MM-DD, template: <template-name>.md -->` as the **first line** of the file (before the title). This enables `pipeline.sh docs-check` to track documentation age and detect stale files.
 - **Freshness metadata validation**: after saving a generated doc, verify that line 1 matches the pattern `<!-- generated: YYYY-MM-DD, template: <name>.md -->`. If the metadata is missing or malformed, fix it immediately — `docs-check` will silently skip files without valid metadata.
+- **Content-aware staleness**: `pipeline.sh docs-check` uses scope metadata from templates (`<!-- scope: ... -->` first line) combined with `git log --since=<generated_date>` to determine staleness. A doc is marked stale only if (a) files matching its template's scope patterns were changed since generation **and** (b) the doc exceeds the freshness threshold. Docs whose scope shows no changes remain fresh regardless of age. If a template has no scope line, the check falls back to pure age-based staleness. The JSON output includes a `scope_changed` field (`true`/`false`/`null`) per file.
 
 ---
 

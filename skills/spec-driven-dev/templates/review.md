@@ -17,6 +17,22 @@ Read `./templates/_preamble.md` for Pipeline Integration and Project Context ins
 
 ---
 
+### Fast-track mode
+
+When reviewing a small bug fix (1–2 REQs, 1–3 changed files):
+
+- **Change Set Discovery:** 1–3 rows (mostly ✅ Planned).
+- **Requirements Traceability:** 1–2 rows (1–2 REQs).
+- **Design Conformance:** brief per subsection. "No changes" for subsections with no impact.
+- **Code Quality & Security:** brief. If the fix is internal logic only: "No new endpoints, no user input changes."
+- **Findings:** 0–2 expected. Any `critical` findings still require a fix cycle.
+- **Fix cycles:** maximum **1 fix cycle** before escalating to user (vs. 3 for full pipeline). A small fix that still fails after 1 cycle likely has a design issue.
+- **Verification Evidence:** still required — actual stdout from test, build, lint.
+
+Target artifact size: **≤ 1 page** (excluding stdout).
+
+---
+
 ## Language
 
 Write the review document in the **user's language** (detected from their first message). This includes:
@@ -220,6 +236,23 @@ The final artifact must contain these sections:
 
 <Findings from Phase 5, or "No security issues found in changed files.">
 
+## Verification Evidence
+
+Actual (truncated) output of commands run during review. Do NOT replace with status assertions.
+
+- **Tests:**
+\`\`\`
+<paste last 20 lines of test command output>
+\`\`\`
+- **Build:**
+\`\`\`
+<paste last 10 lines of build command output>
+\`\`\`
+- **Lint:**
+\`\`\`
+<paste last 10 lines of lint command output>
+\`\`\`
+
 ## Findings
 
 | ID | Severity | File | Description | Requirement |
@@ -250,66 +283,7 @@ The final artifact must contain these sections:
 
 ### Severity Definitions
 
-| Severity | Meaning |
-|----------|---------|
-| `critical` | Must fix before merge — security hole, data loss risk, core requirement unmet |
-| `major` | Must fix before merge — missing test, design deviation, significant quality issue |
-| `minor` | Should fix — naming, minor style issue, missing edge case test |
-| `nit` | Optional — cosmetic, preference-based suggestion |
-
----
-
-## Fix Plan Structure
-
-When verdict is `NEEDS_CHANGES` or `BLOCK`, the review document MUST include a Fix Plan section. The fix plan uses the same Commands and Test Style Source from the approved task plan (`history[3].artifact`) — do NOT discover them again.
-
-### Fix tasks for `critical` / `major` findings
-
-For each finding with severity `critical` or `major`, create a **TDD Fix Task**:
-
-```markdown
-### Fix F-N: <finding description>
-
-*_Finding: F-N_*
-*_Requirements: REQ-X.Y_* (if the finding is linked to a requirement)
-
-**Exploration Test (RED)**
-Write a test demonstrating the finding. MUST FAIL on the current code.
-Follow the Test Style Source from the task plan.
-- [ ] 1. Write test in `<file>` — `<test command>`
-- [ ] 2. Run test — confirm FAILS
-
-**Fix**
-CRITICAL: one subtask = one file.
-- [ ] 3. <Action in file> — `<test command>`
-
-**Re-test (GREEN)**
-- [ ] 4. Run exploration test — confirm PASSES
-- [ ] 5. Run full test suite — confirm no regressions
-```
-
-IMPORTANT: If a finding is not testable (naming, dead code, unused imports, debug artifacts), mark it `NOTE: no test applicable` and provide a flat fix subtask instead:
-
-```markdown
-### Fix F-N: <finding description>
-
-*_Finding: F-N_*
-NOTE: no test applicable
-
-- [ ] 1. <Action in file> — `<lint/build command>`
-```
-
-### Fix tasks for `minor` / `nit` findings
-
-Flat list — no exploration test required:
-
-```markdown
-### Fix F-N: <finding description>
-
-*_Finding: F-N_*
-
-- [ ] 1. <Action in file> — `<test/lint command>`
-```
+Severity definitions and Fix Plan Structure: read `./templates/reference/review-reference.md`.
 
 ---
 
@@ -333,6 +307,7 @@ GOAL: the agent autonomously fixes all findings and re-reviews until the code is
    - Change Set Discovery: use the same `review_base_commit` baseline (the diff grows as fixes accumulate).
    - Check each previous finding: resolved or still present.
    - Check for new findings introduced by fixes.
+   - Re-run test/build/lint and capture fresh stdout for the Verification Evidence section.
 6. **Generate a new revision** of the review document. Register: `sh ./scripts/pipeline.sh artifact <path>`
 7. **Check iteration count.** If this is the **3rd fix cycle** and verdict is still not `PASS` → stop the loop and go to step 8b.
 8. **Repeat** from step 4 until verdict is `PASS` or iteration limit is reached.
@@ -376,6 +351,7 @@ Before delivering the review, verify:
 - [ ] If verdict ≠ `PASS`: fix tasks use Commands and Test Style Source from the task plan (no new discovery).
 - [ ] Each fix iteration is saved as a revision via `pipeline.sh artifact <path>`.
 - [ ] Final verdict is `PASS` before presenting to user for approval.
+- [ ] Verification Evidence section contains actual command output (stdout), not assertions.
 - [ ] Artifact is registered via `pipeline.sh artifact <path>`.
 
 ---
@@ -391,19 +367,11 @@ Do NOT suggest approval until **every** condition is true:
 5. Security scan of changed files is complete.
 6. Findings table lists all issues with ID, severity, file, and description.
 7. Verdict is `PASS` — zero `critical` or `major` findings remain.
-8. Artifact is registered via `pipeline.sh artifact <path>`.
+8. Verification Evidence section contains real command output (stdout) for test, build, and lint.
+9. Artifact is registered via `pipeline.sh artifact <path>`.
 
 ---
 
 ## Antipatterns — Never Do These
 
-| Antipattern | Why it's harmful |
-|---|---|
-| Skipping the implementation report | The implementation report (history[4]) shows which tasks were completed — always verify against it |
-| Reviewing the entire codebase | Scope is limited to files changed since `review_base_commit` |
-| Approving with `major` findings open | Major findings must be resolved before `PASS` verdict |
-| Changing the design in the review | Design is locked in the approved design document — open a new pipeline for design changes |
-| Skipping the traceability matrix | Without it, requirements coverage cannot be verified |
-| Inventing requirements during review | Review checks against approved requirements only — new requirements need a new pipeline |
-| Flagging style preferences as `major` | Style preferences are `nit` at most; reserve `major` for real issues |
-| Infinite fix loop | 3 fix cycles maximum — if not resolved, escalate to user instead of looping forever |
+Antipatterns for this phase: read `./templates/reference/antipatterns.md` § Review.

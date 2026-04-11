@@ -15,6 +15,23 @@ Read `./templates/_preamble.md` for Pipeline Integration and Project Context ins
 
 ---
 
+### Fast-track mode
+
+When the requirements artifact contains 1–2 REQs for a small bug fix:
+
+- **§2.1 Overview:** 1 paragraph.
+- **§2.2 Architecture:** simplified diagram — only the modified component(s). Omit unchanged context unless needed for understanding.
+- **§2.3 Components:** only files requiring changes + 1–2 unchanged files for context. Skip exhaustive "NOT Requiring Changes" list.
+- **§2.4 Key Decisions:** 1 ADR max. Omit if the fix is straightforward with no meaningful alternatives.
+- **§2.5 Data Models:** omit entirely if no new types or schema changes.
+- **§2.6 Correctness Properties:** 2–3 properties focused on the bug scenario. Skip categories that don't apply.
+- **§2.7 Error Handling:** 1–2 rows (main error path + fallback if applicable).
+- **§2.8 Testing Strategy:** reference existing test infrastructure. No new test patterns needed unless the bug exposed a gap.
+
+Target artifact size: **≤ 1.5 pages**.
+
+---
+
 ## Language
 
 Write the design document in the **user's language** (detected from their first message). This includes:
@@ -281,14 +298,4 @@ Do NOT suggest approval until **every** condition is true:
 
 ## Antipatterns to Avoid
 
-| Antipattern | WRONG ❌ | RIGHT ✓ | Why |
-|---|---|---|---|
-| Function bodies | `func refresh() { cache.Get(key)... }` | `func refresh(token Token) (Token, error)` | Interfaces show signatures only |
-| Task lists | "Step 1: create file, Step 2: add tests" | Architecture + interfaces + properties | This is design, not work breakdown |
-| Skipping unchanged files | "Files NOT Requiring Changes" table is empty | Explicitly list files in scope that won't change | Omission suggests scope not fully considered |
-| Existential properties | "There exists a case where refresh works" | "For all expired tokens, refresh returns valid token" | Properties must use universal quantifier |
-| Unlinked properties | "Property 3: tokens are secure" | "Property 3: ... Validates: REQ-1.2" | Every property must trace to a requirement |
-| Vague modification scope | `[MODIFIED]` — "various authentication changes" | `[MODIFIED]` — "adds refreshToken(), modifies authenticate() return type" | Must state what exactly changes |
-| Scope creep | Designing rate limiting not in requirements | Only design what requirements specify | Stay within approved requirements |
-| Silent assumption | Choosing a caching strategy without stating why | `[ASSUMPTION: write-through preferred]` — ask user or mark explicitly | Unstated beliefs cause surprises during implementation |
-| Ignoring existing test patterns | Agent invents new test structure (e.g., flat assertions) | Agent follows existing pattern: `auth/token_test.go:TestRefresh` uses table-driven subtests | Tests must be consistent with the project's existing style |
+Antipatterns for this phase: read `./templates/reference/antipatterns.md` § Design.

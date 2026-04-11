@@ -9,25 +9,31 @@
 #                         multiple pipelines are active simultaneously)
 #
 # Commands:
-#   init <feature-name>   Start a new pipeline for a feature
+#   init [--branch|--no-branch] <feature-name>
+#                         Start a new pipeline for a feature
+#                         --branch: create git branch <prefix><name> (prefix from config, default: feature/)
+#                         --no-branch: skip branch creation even if auto_branch is set in config
 #   status                Show current phase, feature, and artifacts
 #   approve               Advance to next phase (requires artifact)
 #   artifact [path]       Register artifact for current phase
 #   history               Show all features and their status
 #   revisions [phase]     Show revision history for current or specified phase
 #   docs-check            Check project documentation status
+#   task <T-N>            Mark implementation task as completed (resume tracking)
 #   version               Show version
 #   help                  Show this help message
 
 set -e
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 FEATURES_DIR="$PROJECT_ROOT/.spec/features"
 CONFIG_FILE="$PROJECT_ROOT/.spec/config.yaml"
 
 # --- helpers ---
 
-VERSION="2.5.0"
+VERSION="1.1.0"
 EXPLICIT_FEATURE=""
 
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -49,6 +55,22 @@ json_escape() {
     -e 's/"/\\"/g' \
     -e 's/	/\\t/g' \
     -e 's/\r/\\r/g' | tr '\n' ' '
+}
+
+# Read a value from .spec/config.yaml (simple grep-based, no YAML parser)
+# Usage: read_config <key> [default]
+# Returns the value or default (empty string if no default)
+read_config() {
+  local key="$1" default="${2:-}"
+  if [ -f "$CONFIG_FILE" ]; then
+    local val
+    val="$(grep "^${key}:" "$CONFIG_FILE" 2>/dev/null | head -1 | sed "s/^${key}:[[:space:]]*//" | sed 's/[[:space:]]*$//')"
+    if [ -n "$val" ]; then
+      printf '%s' "$val"
+      return
+    fi
+  fi
+  printf '%s' "$default"
 }
 
 # --- per-feature state ---
@@ -90,12 +112,41 @@ validate_kv() {
   if [ -n "$missing" ]; then
     die "Corrupted pipeline state ($KV_FILE): missing fields:$missing. Fix the file manually or remove and re-init."
   fi
+  # Verify every line matches key=value format (key: lowercase + digits + underscore)
+  local line_num=0
+  while IFS= read -r line || [ -n "$line" ]; do
+    line_num=$((line_num + 1))
+    case "$line" in
+      "") continue ;;  # skip blank lines
+      [a-z_]*=*) ;;    # valid key=value
+      *) die "Corrupted pipeline state ($KV_FILE): invalid line $line_num: $line" ;;
+    esac
+  done < "$KV_FILE"
+}
+
+# Escape a value for safe use in sed replacement string
+kv_escape_sed() {
+  printf '%s' "$1" | sed -e 's/[&\\/]/\\&/g'
+}
+
+# Validate that a value is safe for the KV store (no =, |, or newlines)
+kv_validate_value() {
+  case "$1" in
+    *'='*) die "KV value must not contain '=': $1" ;;
+    *'|'*) die "KV value must not contain '|': $1" ;;
+  esac
+  case "$1" in
+    *"$(printf '\n')"*) die "KV value must not contain newlines: $1" ;;
+  esac
 }
 
 write_field() {
+  kv_validate_value "$2"
   if [ -f "$KV_FILE" ] && grep -q "^$1=" "$KV_FILE" 2>/dev/null; then
     local tmp="$KV_FILE.tmp"
-    sed "s|^$1=.*|$1=$2|" "$KV_FILE" > "$tmp" && mv "$tmp" "$KV_FILE"
+    local escaped
+    escaped="$(kv_escape_sed "$2")"
+    sed "s|^$1=.*|$1=$escaped|" "$KV_FILE" > "$tmp" && mv "$tmp" "$KV_FILE"
   else
     echo "$1=$2" >> "$KV_FILE"
   fi
@@ -223,9 +274,27 @@ rebuild_json() {
     local rbc
     rbc="$(read_field review_base_commit 2>/dev/null || echo "")"
     if [ -n "$rbc" ]; then
-      printf '  "review_base_commit": "%s"\n' "$(json_escape "$rbc")"
+      printf '  "review_base_commit": "%s",\n' "$(json_escape "$rbc")"
     else
-      printf '  "review_base_commit": null\n'
+      printf '  "review_base_commit": null,\n'
+    fi
+
+    # Include branch if set
+    local br
+    br="$(read_field branch 2>/dev/null || echo "")"
+    if [ -n "$br" ]; then
+      printf '  "branch": "%s",\n' "$(json_escape "$br")"
+    else
+      printf '  "branch": null,\n'
+    fi
+
+    # Include last_completed_task if set
+    local lct
+    lct="$(read_field last_completed_task 2>/dev/null || echo "")"
+    if [ -n "$lct" ]; then
+      printf '  "last_completed_task": "%s"\n' "$(json_escape "$lct")"
+    else
+      printf '  "last_completed_task": null\n'
     fi
 
     printf '}\n'
@@ -236,8 +305,22 @@ rebuild_json() {
 # --- commands ---
 
 cmd_init() {
-  local feature="$1"
-  [ -z "$feature" ] && die "Usage: pipeline.sh init <feature-name>"
+  # Parse init-specific flags
+  local do_branch=""
+  local feature=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --branch)    do_branch="yes"; shift ;;
+      --no-branch) do_branch="no"; shift ;;
+      -*)          die "Unknown flag for init: $1" ;;
+      *)
+        [ -n "$feature" ] && die "Unexpected argument: $1"
+        feature="$1"; shift
+        ;;
+    esac
+  done
+
+  [ -z "$feature" ] && die "Usage: pipeline.sh init [--branch|--no-branch] <feature-name>"
 
   # Validate feature name (kebab-case)
   case "$feature" in
@@ -249,6 +332,44 @@ cmd_init() {
 
   if [ ${#feature} -gt 64 ]; then
     die "Feature name too long (max 64 chars): $feature"
+  fi
+
+  # Resolve branch creation: flag > config > default (no branch)
+  if [ -z "$do_branch" ]; then
+    local auto_branch
+    auto_branch="$(read_config auto_branch "false")"
+    case "$auto_branch" in
+      true|yes|1) do_branch="yes" ;;
+      *)          do_branch="no" ;;
+    esac
+  fi
+
+  local branch_name=""
+  if [ "$do_branch" = "yes" ]; then
+    # Verify git is available
+    if ! command -v git >/dev/null 2>&1; then
+      die "Git not found. Cannot create branch."
+    fi
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+      die "Not a git repository. Cannot create branch."
+    fi
+
+    local prefix
+    prefix="$(read_config branch_prefix "feature/")"
+    branch_name="${prefix}${feature}"
+
+    # Check if branch already exists
+    if git rev-parse --verify "$branch_name" >/dev/null 2>&1; then
+      die "Branch '$branch_name' already exists."
+    fi
+
+    # Warn about dirty working tree
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+      warn "Working tree has uncommitted changes."
+    fi
+
+    git checkout -b "$branch_name" || die "Failed to create branch '$branch_name'."
+    info "Created branch: $branch_name"
   fi
 
   local fdir="$FEATURES_DIR/$feature"
@@ -269,16 +390,22 @@ cmd_init() {
   set_feature_context "$feature"
 
   # Initialize KV store
-  cat > "$KV_FILE" <<EOF
-feature=$feature
-phase=explore
-created_at=$(iso_now)
-current_artifact=
-history_count=0
-EOF
+  {
+    echo "feature=$feature"
+    echo "phase=explore"
+    echo "created_at=$(iso_now)"
+    echo "current_artifact="
+    echo "history_count=0"
+    if [ -n "$branch_name" ]; then
+      echo "branch=$branch_name"
+    fi
+  } > "$KV_FILE"
 
   rebuild_json
   info "Pipeline initialized for '$feature'"
+  if [ -n "$branch_name" ]; then
+    info "Branch: $branch_name"
+  fi
   info "Phase: [1/6] explore"
   info "Artifacts: .spec/features/$feature/"
   info "Read template: ./templates/explore.md"
@@ -326,6 +453,14 @@ cmd_status() {
     printf "│ Artifact: %-34s│\n" "$artifact"
   else
     printf "│ Artifact: %-34s│\n" "(none — register before approve)"
+  fi
+  # Show last completed task during implementation phase
+  if [ "$phase" = "implementation" ]; then
+    local lct
+    lct="$(read_field last_completed_task 2>/dev/null || echo "")"
+    if [ -n "$lct" ]; then
+      printf "│ Last task: %-33s│\n" "$lct"
+    fi
   fi
   echo "├─────────────────────────────────────────────┤"
 
@@ -449,6 +584,11 @@ cmd_approve() {
   write_field phase "$next"
   write_field current_artifact ""
 
+  # Clear task tracking when leaving implementation
+  if [ "$phase" = "implementation" ]; then
+    write_field last_completed_task ""
+  fi
+
   rebuild_json
 
   if [ "$next" = "done" ]; then
@@ -472,6 +612,21 @@ cmd_approve() {
     info "Advanced to: [$(phase_number "$next")/6] $next"
     info "Read template: ./templates/${next}.md"
   fi
+}
+
+cmd_task() {
+  local task_id="$1"
+  [ -z "$task_id" ] && die "Usage: pipeline.sh task <T-N>"
+
+  resolve_feature || die "No active pipeline."
+
+  local phase
+  phase="$(read_field phase)"
+  [ "$phase" = "implementation" ] || die "Task tracking is only available during implementation phase (current: $phase)."
+
+  write_field last_completed_task "$task_id"
+  rebuild_json
+  info "Task $task_id marked complete"
 }
 
 cmd_history() {
@@ -564,6 +719,7 @@ cmd_docs_check() {
   fi
 
   local full_path="$PROJECT_ROOT/$docs_dir"
+  local templates_dir="$SKILL_DIR/templates/docs"
   local now_epoch
   now_epoch="$(date +%s 2>/dev/null || echo 0)"
   local threshold=$((freshness_days * 86400))
@@ -572,7 +728,7 @@ cmd_docs_check() {
     printf '{"exists": true, "dir": "%s", "freshness_days": %d, "files": [' "$(json_escape "$docs_dir")" "$freshness_days"
     local first=1
     for f in $(find "$full_path" -maxdepth 1 -type f -name '*.md' 2>/dev/null | sort); do
-      local fname generated template age_days stale
+      local fname generated template age_days stale scope_changed
       fname="$(basename "$f")"
 
       # Parse freshness comment: <!-- generated: YYYY-MM-DD, template: name.md -->
@@ -580,6 +736,7 @@ cmd_docs_check() {
       template="null"
       age_days="null"
       stale="false"
+      scope_changed="null"
       local first_line
       first_line="$(head -1 "$f" 2>/dev/null)"
       case "$first_line" in
@@ -595,8 +752,45 @@ cmd_docs_check() {
             gen_epoch="$(date -j -f '%Y-%m-%d' "$gen_date" '+%s' 2>/dev/null || date -d "$gen_date" '+%s' 2>/dev/null || echo 0)"
             if [ "$gen_epoch" -gt 0 ] && [ "$now_epoch" -gt 0 ]; then
               age_days=$(( (now_epoch - gen_epoch) / 86400 ))
-              if [ "$age_days" -gt "$freshness_days" ]; then
-                stale="true"
+
+              # Content-aware staleness: check scope from template
+              local tmpl_file="$templates_dir/$gen_tmpl"
+              if [ -f "$tmpl_file" ]; then
+                local scope_line
+                scope_line="$(head -1 "$tmpl_file" 2>/dev/null)"
+                case "$scope_line" in
+                  "<!-- scope:"*"-->")
+                    # Extract patterns: <!-- scope: p1, p2, p3 --> → p1 p2 p3
+                    local patterns
+                    patterns="$(echo "$scope_line" | sed 's/<!-- scope: //' | sed 's/ -->//' | sed 's/,[[:space:]]*/\n/g' | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+                    if [ -n "$patterns" ]; then
+                      # Check if any commits touched scope patterns since generation date
+                      local git_hits
+                      git_hits="$(cd "$PROJECT_ROOT" && eval "git log --oneline --since=\"$gen_date\" -- $patterns" 2>/dev/null | head -1)"
+                      if [ -n "$git_hits" ]; then
+                        scope_changed="true"
+                        # Scope has changes — apply age threshold
+                        if [ "$age_days" -gt "$freshness_days" ]; then
+                          stale="true"
+                        fi
+                      else
+                        scope_changed="false"
+                        # No scope changes — not stale regardless of age
+                      fi
+                    fi
+                    ;;
+                  *)
+                    # No scope in template — fallback to pure age check
+                    if [ "$age_days" -gt "$freshness_days" ]; then
+                      stale="true"
+                    fi
+                    ;;
+                esac
+              else
+                # Template file not found — fallback to pure age check
+                if [ "$age_days" -gt "$freshness_days" ]; then
+                  stale="true"
+                fi
               fi
             fi
           fi
@@ -608,11 +802,11 @@ cmd_docs_check() {
       else
         printf ', '
       fi
-      printf '{"name": "%s", "generated": %s, "template": %s, "age_days": %s, "stale": %s}' \
-        "$(json_escape "$fname")" "$generated" "$template" "$age_days" "$stale"
+      printf '{"name": "%s", "generated": %s, "template": %s, "age_days": %s, "stale": %s, "scope_changed": %s}' \
+        "$(json_escape "$fname")" "$generated" "$template" "$age_days" "$stale" "$scope_changed"
     done
     printf '], "stale": ['
-    # Collect stale file names
+    # Collect stale file names (re-parse with same logic)
     local sfirst=1
     for f in $(find "$full_path" -maxdepth 1 -type f -name '*.md' 2>/dev/null | sort); do
       local first_line fname
@@ -620,19 +814,48 @@ cmd_docs_check() {
       first_line="$(head -1 "$f" 2>/dev/null)"
       case "$first_line" in
         *"<!-- generated:"*"template:"*"-->"*)
-          local gen_date gen_epoch
+          local gen_date gen_tmpl gen_epoch s_stale
           gen_date="$(echo "$first_line" | sed 's/.*<!-- generated: \([0-9-]*\),.*/\1/')"
+          gen_tmpl="$(echo "$first_line" | sed 's/.*template: \([^ ]*\) -->.*/\1/')"
           gen_epoch="$(date -j -f '%Y-%m-%d' "$gen_date" '+%s' 2>/dev/null || date -d "$gen_date" '+%s' 2>/dev/null || echo 0)"
+          s_stale="false"
           if [ "$gen_epoch" -gt 0 ] && [ "$now_epoch" -gt 0 ]; then
             local file_age=$(( (now_epoch - gen_epoch) / 86400 ))
-            if [ "$file_age" -gt "$freshness_days" ]; then
-              if [ "$sfirst" -eq 1 ]; then
-                sfirst=0
-              else
-                printf ', '
+            local tmpl_file="$templates_dir/$gen_tmpl"
+            if [ -f "$tmpl_file" ]; then
+              local scope_line
+              scope_line="$(head -1 "$tmpl_file" 2>/dev/null)"
+              case "$scope_line" in
+                "<!-- scope:"*"-->")
+                  local patterns
+                  patterns="$(echo "$scope_line" | sed 's/<!-- scope: //' | sed 's/ -->//' | sed 's/,[[:space:]]*/\n/g' | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+                  if [ -n "$patterns" ]; then
+                    local git_hits
+                    git_hits="$(cd "$PROJECT_ROOT" && eval "git log --oneline --since=\"$gen_date\" -- $patterns" 2>/dev/null | head -1)"
+                    if [ -n "$git_hits" ] && [ "$file_age" -gt "$freshness_days" ]; then
+                      s_stale="true"
+                    fi
+                  fi
+                  ;;
+                *)
+                  if [ "$file_age" -gt "$freshness_days" ]; then
+                    s_stale="true"
+                  fi
+                  ;;
+              esac
+            else
+              if [ "$file_age" -gt "$freshness_days" ]; then
+                s_stale="true"
               fi
-              printf '"%s"' "$(json_escape "$fname")"
             fi
+          fi
+          if [ "$s_stale" = "true" ]; then
+            if [ "$sfirst" -eq 1 ]; then
+              sfirst=0
+            else
+              printf ', '
+            fi
+            printf '"%s"' "$(json_escape "$fname")"
           fi
           ;;
       esac
@@ -652,13 +875,17 @@ cmd_help() {
   echo "  --feature <name>  Select feature (needed when multiple are active)"
   echo ""
   echo "Commands:"
-  echo "  init <feature>    Start a new pipeline (kebab-case name)"
+  echo "  init [--branch|--no-branch] <feature>"
+  echo "                    Start a new pipeline (kebab-case name)"
+  echo "                    --branch: create git branch <prefix><name>"
+  echo "                    --no-branch: skip auto-branch from config"
   echo "  status            Show current phase, artifacts, progress"
   echo "  artifact [path]   Register output artifact for current phase"
   echo "  approve           Advance to next phase (needs artifact)"
   echo "  revisions [phase] Show revision history (current phase or specify: explore, all)"
   echo "  history           Show all features and their status"
   echo "  docs-check        Check project documentation status (JSON)"
+  echo "  task <T-N>        Mark implementation task as completed (resume tracking)"
   echo "  version           Show version"
   echo "  help              Show this message"
   echo ""
@@ -702,13 +929,14 @@ while [ $# -gt 0 ]; do
 done
 
 case "${1:-help}" in
-  init)     cmd_init "$2" ;;
+  init)     shift; cmd_init "$@" ;;
   status)   cmd_status ;;
   artifact) cmd_artifact "$2" ;;
   approve)  cmd_approve ;;
   revisions) cmd_revisions "$2" ;;
   history)  cmd_history ;;
   docs-check) cmd_docs_check ;;
+  task)     cmd_task "$2" ;;
   version|--version|-v) cmd_version ;;
   help|--help|-h) cmd_help ;;
   *)        die "Unknown command: $1. Run 'pipeline.sh help' for usage." ;;

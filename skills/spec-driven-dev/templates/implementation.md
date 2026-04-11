@@ -23,6 +23,19 @@ Read `./templates/_preamble.md` for Pipeline Integration and Project Context ins
 
 ---
 
+### Fast-track mode
+
+When the task plan contains 4–5 tasks for a small bug fix:
+
+- **Summary:** 1 paragraph (bug description + fix approach).
+- **Task Execution:** 1–2 lines per task — status and brief note only. Skip detailed iteration logs unless a task required retry.
+- **Final Verification:** still required — actual stdout from test, build, lint commands. No shortcuts here.
+- **Files Changed:** list of modified/created files (typically 1–3).
+
+Target artifact size: **≤ 0.5 page** (excluding stdout).
+
+---
+
 ## Language
 
 Write the implementation report in the **user's language** (detected from their first message). This includes:
@@ -45,6 +58,8 @@ Read the approved task plan artifact. Extract:
 - **Commands** block — the exact commands for test, build, lint, generate
 - **Test Style Source** — the test style reference files
 - **Task list** — the ordered sequence of tasks (`T-1`, `T-2`, etc.)
+
+**Resume check:** Run `pipeline.sh status`. If `Last task` is shown (e.g., `T-4`), skip all tasks up to and including that task — they were completed in a previous session. Resume from the next task.
 
 ### Step 2: Execute Each Task
 
@@ -104,6 +119,7 @@ After completing each task, update the implementation report artifact by marking
 - Add a brief status note after the task title (e.g., "RED confirmed", "GREEN (3 tests pass)", "needed adjustment — see notes")
 - If a task required iteration (fix → re-run), note what was adjusted
 - Register the updated artifact after each task: `sh ./scripts/pipeline.sh artifact`
+- After marking each task `[x]`, also run: `sh ./scripts/pipeline.sh task T-N` — this enables resume if the session is interrupted
 
 ### Step 4: Handle Failures
 
@@ -169,10 +185,27 @@ Brief description of what was implemented. Number of tasks completed.
 ...
 
 ## Final Verification
-- **Tests:** ✅ All pass (N tests)
-- **Build:** ✅ Success
-- **Lint:** ✅ Clean (or: ⚠️ N pre-existing warnings)
-- **Generate:** ✅ Up to date (if applicable)
+
+Include the actual (possibly truncated) stdout of each command below. Do NOT replace real output with status assertions like "All pass".
+
+```
+- **Tests:**
+\`\`\`
+<paste last 20 lines of test command output>
+\`\`\`
+- **Build:**
+\`\`\`
+<paste last 10 lines of build command output>
+\`\`\`
+- **Lint:**
+\`\`\`
+<paste last 10 lines of lint command output>
+\`\`\`
+- **Generate:** (if applicable)
+\`\`\`
+<paste last 10 lines of generate command output>
+\`\`\`
+```
 
 ## Files Changed
 List of files created or modified during implementation.
@@ -194,6 +227,7 @@ Before presenting to the user:
 - [ ] Lint passes (or only pre-existing warnings)
 - [ ] Implementation report artifact is registered via `pipeline.sh artifact`
 - [ ] No tasks were silently skipped
+- [ ] Final Verification section contains actual command output (stdout), not just status assertions
 
 ## Done when
 
@@ -205,14 +239,8 @@ Do NOT suggest approval until **every** condition is true:
 4. Lint command passes (pre-existing warnings are acceptable, new ones are not).
 5. Implementation report lists all files changed.
 6. Artifact is registered via `pipeline.sh artifact`.
+7. Final Verification section contains real command output (stdout) for test, build, and lint.
 
 ## Antipatterns
 
-| Antipattern | WRONG ❌ | RIGHT ✓ | Why |
-|---|---|---|---|
-| Skipping exploration test | Write code first, then test | Write test first (RED), then code (GREEN) | TDD requires RED→GREEN cycle |
-| Modifying preservation tests | Change test to match new code | Change code to satisfy both old and new tests | Preservation tests lock correct behavior |
-| Bulk implementation | Implement all tasks at once, test at the end | Implement one task, test, mark done, repeat | Atomic execution finds issues early |
-| Silent skip | Skip a failing task without noting it | Note the issue, ask user, document decision | Transparency over speed |
-| Plan modification | "This task doesn't make sense, I'll do it differently" | Execute as planned; note concerns for review phase | The plan was approved — execute it faithfully |
-| Silently leaving broken state | Continue to next task while tests are failing | Stop after 3 failed attempts, document state, ask user to decide | User must stay in control when implementation is stuck |
+Antipatterns for this phase: read `./templates/reference/antipatterns.md` § Implementation.
