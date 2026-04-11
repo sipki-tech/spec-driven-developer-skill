@@ -126,10 +126,12 @@ Before starting any pipeline work, follow these steps in order:
 2. **Read project config**: check if `.spec/config.yaml` exists.
    - If yes → read it, apply `context` to all phases, note `rules.*` for each phase.
    - If no → proceed without config (defaults apply).
-3. **Check documentation**: run `pipeline.sh docs-check`.
-   - **Docs directory missing** → suggest: *"Project documentation (<docs_dir>/) not found. I can generate it to better understand your codebase. Say 'generate docs' or 'skip'."* This is a soft suggestion — the pipeline works without documentation.
-   - **Docs exist, stale files found** → suggest: *"Some docs are outdated (<file>: <N> days old). Regenerate before starting? Say 'update docs' or 'skip'."* If user agrees, read `./templates/docs-maintenance.md` for the Stale doc regeneration workflow.
+3. **Check documentation** (MUST — do not skip this step): run `pipeline.sh docs-check`.
+   - **Docs directory missing** → suggest: *"Project documentation (<docs_dir>/) not found. I can generate it to better understand your codebase. Say 'generate docs' or 'skip'."* **Wait for the user's response** before proceeding. This is a soft gate — the pipeline works without documentation, but the user must explicitly acknowledge (say 'generate docs' or 'skip').
+   - **Docs exist, stale files found** → suggest: *"Some docs are outdated (<file>: <N> days old). Regenerate before starting? Say 'update docs' or 'skip'."* **Wait for the user's response.** If user agrees, read `./templates/docs-maintenance.md` for the Stale doc regeneration workflow.
    - **Docs exist, all fresh** → use as supplementary context for ALL phases. Read `<docs_dir>/README.md` for the documentation map.
+   - If user says **"generate docs"** or **"update docs"**: read `./templates/docs-maintenance.md`, follow the workflow. Generated documentation files go to `<docs_dir>/` (default: `.spec/`), **NOT** to `.spec/features/<feature>/`.
+   - **Do NOT proceed to step 4 until the user responds** to the documentation suggestion.
 4. **Start pipeline**: run `pipeline.sh init <feature-name>`.
 
 For documentation generation, staleness checks, and regeneration workflows, read `./templates/docs-maintenance.md`.
@@ -166,7 +168,7 @@ For **bug fixes with a known reproduction** or other small, well-understood chan
 2. **Never skip phases.** Follow the order: explore → requirements → design → task-plan → implementation → review.
 3. **Never auto-approve.** Wait for the user to explicitly say "approve" or equivalent.
 4. **Read the template.** Before generating output for a phase, read the corresponding template file.
-5. **Save artifacts.** Save generated documents to `.spec/features/<feature>/` and register them with `pipeline.sh artifact`.
+5. **Save artifacts.** Save phase artifacts (explore, requirements, design, task-plan, implementation, review) to `.spec/features/<feature>/` and register them with `pipeline.sh artifact`. **Project documentation** (README.md, ARCHITECTURE.md, DOMAIN.md, etc.) goes to `<docs_dir>/` (default: `.spec/`), NOT to `.spec/features/<feature>/` — these are separate directories with separate purposes.
 6. **Each phase produces one artifact** that becomes input for the next phase.
 7. **Artifacts are cumulative.** Each phase reads all prior artifacts.
 8. **Revision limit.** If the user rejects the same artifact 3 times in a row, stop generating and ask: "We've gone through 3 revisions — could you clarify what's missing or what direction you'd prefer?" Do not continue revising without explicit guidance. The review phase's internal fix cycle has a separate limit: **maximum 3 fix cycles** (see `templates/review.md` Iteration Workflow). After 3 fix cycles without `PASS`, escalate to user.

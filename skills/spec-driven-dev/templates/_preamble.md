@@ -20,6 +20,12 @@ Before starting any phase work:
    b. Register: `sh ./scripts/pipeline.sh artifact` (defaults to `.spec/features/<feature-name>/<phase-name>.md`)
    c. Wait for user to confirm, then: `sh ./scripts/pipeline.sh approve`
 
+> **Directory separation — DO NOT mix these:**
+> - **Phase artifacts** (explore.md, requirements.md, design.md, …) → `.spec/features/<feature>/`
+> - **Project documentation** (README.md, ARCHITECTURE.md, DOMAIN.md, …) → `<docs_dir>/` (default: `.spec/`)
+>
+> Phase artifact instructions above apply ONLY to pipeline phase outputs. Project documentation is a separate workflow — see `./templates/docs-maintenance.md`.
+
 ---
 
 ## Project Context

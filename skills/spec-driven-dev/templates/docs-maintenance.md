@@ -8,6 +8,8 @@ This file contains all documentation generation, staleness checking, and post-pi
 
 The skill supports a self-documenting mechanic via a project documentation directory (default: `.spec/`, configurable via `docs_dir` in `config.yaml`).
 
+> **Directory separation:** Project documentation files (README.md, ARCHITECTURE.md, DOMAIN.md, etc.) live in `<docs_dir>/` (default: `.spec/`). Pipeline phase artifacts (explore.md, requirements.md, design.md, etc.) live in `.spec/features/<feature>/`. **Never place project documentation into the feature directory or vice versa.**
+
 ### Pre-pipeline check
 
 When running `pipeline.sh init <feature-name>`, before starting the Explore phase:

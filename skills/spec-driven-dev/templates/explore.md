@@ -64,6 +64,8 @@ Without waiting for all answers:
 
 **Project documentation shortcut:** If the project documentation directory exists (default: `.spec/`, configurable via `docs_dir` in `config.yaml`), read `README.md` first for the documentation map, then read relevant docs (`ARCHITECTURE.md`, `PACKAGES.md`, `DOMAIN.md`) before scanning source code. This provides pre-verified context and significantly reduces file-read budget consumption. If docs exist, you may need fewer than 20 raw file reads.
 
+> **Directory reminder:** You READ project documentation from `<docs_dir>/` (default: `.spec/`). You WRITE phase artifacts to `.spec/features/<feature>/`. These are separate directories — do not mix them.
+
 - Read relevant source code, configs, and tests
 - Identify existing patterns, conventions, and constraints
 

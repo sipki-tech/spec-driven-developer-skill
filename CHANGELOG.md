@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-04-11
+
+### Fixed
+- **KV newline validation** — `kv_validate_value()` used unreliable `case` pattern with `$(printf '\n')` for newline detection; replaced with portable `wc -l` check. Fixes false-positive "KV value must not contain newlines" errors on some shells.
+- **Docs-check pre-flight enforcement** — Pre-flight Checklist step 3 now marked MUST; agent must wait for user response ('generate docs' / 'update docs' / 'skip') before proceeding to `init`. Previously the agent could silently skip docs-check and start feature work without documentation.
+- **Project docs placed in wrong directory** — Added explicit directory separation notes in 5 locations (`_preamble.md`, `SKILL.md` rule 5, `SKILL.md` pre-flight, `docs/README.md`, `docs-maintenance.md`, `explore.md`) to prevent agents from placing project documentation (`README.md`, `ARCHITECTURE.md`, etc.) into `.spec/features/<feature>/` instead of `<docs_dir>/` (default: `.spec/`).
+
 ## [1.1.0] - 2026-04-11
 
 All changes since v1.0.0 — collapsed from development history into a single release.

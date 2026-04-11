@@ -33,7 +33,7 @@ CONFIG_FILE="$PROJECT_ROOT/.spec/config.yaml"
 
 # --- helpers ---
 
-VERSION="1.1.0"
+VERSION="1.1.1"
 EXPLICIT_FEATURE=""
 
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -135,9 +135,12 @@ kv_validate_value() {
     *'='*) die "KV value must not contain '=': $1" ;;
     *'|'*) die "KV value must not contain '|': $1" ;;
   esac
-  case "$1" in
-    *"$(printf '\n')"*) die "KV value must not contain newlines: $1" ;;
-  esac
+  # Check for newlines by comparing line count (portable across POSIX shells)
+  local line_count
+  line_count="$(printf '%s' "$1" | wc -l)"
+  if [ "$line_count" -ne 0 ]; then
+    die "KV value must not contain newlines: $1"
+  fi
 }
 
 write_field() {
