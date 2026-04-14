@@ -49,7 +49,7 @@ Keep in English (do not translate):
 
 ---
 
-## Phase 1: Context Clarification (optional)
+## Step 1: Context Clarification (optional)
 
 Ask clarifying questions when:
 - The requirements admit multiple substantially different architectural solutions
@@ -60,7 +60,7 @@ Group 2–4 questions in a single message. If the requirements are self-containe
 
 ---
 
-## Phase 2: Design Document Generation
+## Step 2: Design Document Generation
 
 Produce a design document with the following sections. All marked **[REQUIRED]** must appear in every design document. Sections marked **[IF APPLICABLE]** should be included when relevant.
 
@@ -260,6 +260,7 @@ Use a property-based testing library appropriate for the project's language. For
 
 **Rules:**
 - Every correctness property from section 2.6 must have a corresponding property-based test
+- If no property-based testing library is available for the project's language, substitute targeted unit tests covering representative inputs for each correctness property. Mark them `prop_<name>` and tag with `Property/<N>` as usual. In the Test Style Source block, note: "PBT unavailable — using targeted unit tests as substitute."
 - Every unit test must reference at least one `Feature/` or `Property/` tag
 - Tests are specified by **what they verify** — not by implementation
 

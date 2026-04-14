@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-04-14
+
+### Added
+- **`config-check` command** — validates `.spec/config.yaml` keys against a whitelist and checks types (`doc_freshness_days` numeric, `auto_branch` boolean). Flags unknown keys (e.g. typos like `ruls.explore`).
+- **`inject` command** — `pipeline.sh inject <phase> <path>` registers a pre-written artifact, skips intermediate phases (marked `(injected)` in history), and jumps to the target phase. Lightweight content validation for requirements (`WHEN`/`SHALL`) and design (`Correctness`/`Property`).
+- **`abandon` command** — `pipeline.sh abandon [feature]` marks an active pipeline as done without completing remaining phases. Artifacts are preserved.
+- **`config.yaml.example`** — template file in `.spec/` with all 14 supported keys and descriptions.
+- **PBT fallback** — `design.md` §2.8 now allows deterministic fixtures when Property-Based Testing is impractical.
+
+### Changed
+- **Internal "Phase N" → "Step N"** — renamed in-template sub-headings (`requirements.md`, `design.md`, `task-plan.md`, `review.md`) to avoid confusion with pipeline phases.
+- **Config documentation** — replaced prose list in `SKILL.md` with a compact table (`Key | Type | Default | Description`).
+
+### Fixed
+- **`eval` removed from `docs-check`** — eliminated shell injection vector; word-splitting on `$patterns` with explicit SC2086 disable.
+- **`docs-check` deduplication** — extracted `check_file_staleness()` helper; removed duplicated staleness logic.
+- **`for $(find)` → `while read`** — replaced unsafe `for f in $(find ...)` loops in `cmd_revisions` and `cmd_docs_check` with `find | while IFS= read -r f` (or temp-file redirect) to handle paths with spaces.
+
+### Security
+- **Shell injection** — `eval` usage in `cmd_docs_check` replaced with safe word-splitting pattern.
+
 ## [1.1.1] - 2026-04-11
 
 ### Fixed

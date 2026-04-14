@@ -50,7 +50,7 @@ Keep in English (do not translate):
 
 ---
 
-## Phase 1: Change Set Discovery
+## Step 1: Change Set Discovery
 
 Determine which files were changed during implementation.
 
@@ -87,7 +87,7 @@ Also cross-reference with the implementation report (history[4]) to verify that 
 
 ---
 
-## Phase 2: Requirements Traceability Audit
+## Step 2: Requirements Traceability Audit
 
 For each requirement in the requirements document, verify implementation:
 
@@ -108,7 +108,7 @@ CRITICAL: Every requirement MUST appear in the matrix. A requirement without a c
 
 ---
 
-## Phase 3: Design Conformance
+## Step 3: Design Conformance
 
 Verify the implementation matches the approved design document:
 
@@ -156,7 +156,7 @@ NOTE: Not all categories apply to every feature. Only review properties listed i
 
 ---
 
-## Phase 4: Code Quality
+## Step 4: Code Quality
 
 Review the changed files for quality issues. Focus on the diff, not the entire codebase.
 
@@ -184,7 +184,7 @@ Review the changed files for quality issues. Focus on the diff, not the entire c
 
 ---
 
-## Phase 5: Security Scan
+## Step 5: Security Scan
 
 IMPORTANT: Scope this scan to **changed files + the full request handling chain for any new public API endpoints** exposed by the changed code. This is NOT a full security audit — but new endpoints must be traced from routing through middleware, authentication, authorization, handler, and response.
 

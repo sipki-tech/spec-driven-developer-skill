@@ -31,6 +31,9 @@ Each phase has a dedicated prompt template. Read the template for the **current*
 | Register output | `sh ./scripts/pipeline.sh artifact [path]` |
 | Advance phase | `sh ./scripts/pipeline.sh approve` (only after user says "approve") |
 | Mark task done | `sh ./scripts/pipeline.sh task T-N` (implementation phase only) |
+| Abandon feature | `sh ./scripts/pipeline.sh abandon [feature]` |
+| Validate config | `sh ./scripts/pipeline.sh config-check` |
+| Inject artifact | `sh ./scripts/pipeline.sh inject <phase> <path>` |
 | Check docs | `sh ./scripts/pipeline.sh docs-check` |
 | Multi-feature | Add `--feature <name>` before any command |
 
@@ -82,6 +85,12 @@ sh ./scripts/pipeline.sh docs-check
 
 # Mark an implementation task as completed (enables resume)
 sh ./scripts/pipeline.sh task <T-N>
+
+# Validate config file keys and types
+sh ./scripts/pipeline.sh config-check
+
+# Inject a pre-written artifact and skip to that phase
+sh ./scripts/pipeline.sh inject <phase> <path>
 ```
 
 ### Parallel Pipelines
@@ -97,17 +106,21 @@ Without the flag, the pipeline auto-detects the active feature. If more than one
 
 ## Project Configuration
 
-If the file `.spec/config.yaml` exists in the project root, read it before starting any phase.
+If the file `.spec/config.yaml` exists in the project root, read it before starting any phase. See `.spec/config.yaml.example` for a template with all supported keys.
 
-- **`context`** — project-wide background (tech stack, conventions, repo structure). Treat as extra context for ALL phases.
-- **`rules.<phase>`** — phase-specific rules that supplement (not replace) the template instructions.
-- **`test_skill`** (optional) — name of an installed skill for test generation. If present, delegate test specification (Design §2.8) and test task creation (Implementation) to this skill. Pass Correctness Properties and Coverage Matrix as input.
-- **`test_reference`** (optional) — glob or file paths pointing to representative test files. If present, use these as the style reference for all generated tests. If absent, auto-discover adjacent tests.
-- **`docs_dir`** (optional) — directory for project documentation, default: `.spec`. The agent reads documentation from this directory for project context and writes generated docs here.
-- **`doc_freshness_days`** (optional) — number of days after which a generated doc is considered stale, default: `30`. Used by `pipeline.sh docs-check` to flag outdated documentation.
-- **`rules.docs`** (optional) — rules for documentation generation, analogous to `rules.explore` etc. Example: `"Skip FILES.md — no file storage"`, `"Always include Mermaid diagrams in ARCHITECTURE.md"`.
-- **`auto_branch`** (optional) — boolean, default: `false`. When `true`, `pipeline.sh init` automatically creates a git branch `<branch_prefix><feature-name>` without needing `--branch`. Use `--no-branch` to override.
-- **`branch_prefix`** (optional) — string, default: `feature/`. Prefix for auto-created branches. Examples: `bug/`, `fix/`, `hotfix/`, or empty string for no prefix.
+> **Format limitation:** the pipeline parser reads flat `key: value` pairs only. Nested YAML structures, multi-line values, and quoted strings are not supported.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `context` | string | — | Project-wide background for ALL phases |
+| `rules.<phase>` | string | — | Phase-specific rules (supplement template) |
+| `rules.docs` | string | — | Rules for documentation generation |
+| `test_skill` | string | — | Skill name for delegated test generation |
+| `test_reference` | string | — | Glob/paths to representative test files |
+| `docs_dir` | string | `.spec` | Directory for project documentation |
+| `doc_freshness_days` | integer | `30` | Days before a generated doc is stale |
+| `auto_branch` | boolean | `false` | Auto-create git branch on `init` |
+| `branch_prefix` | string | `feature/` | Prefix for auto-created branches |
 
 Phase-specific rule keys: `rules.explore`, `rules.requirements`, `rules.design`, `rules.task-plan`, `rules.implementation`, `rules.review`, `rules.docs`.
 

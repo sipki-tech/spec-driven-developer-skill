@@ -1,0 +1,40 @@
+# Spec-Driven Dev — Project Configuration
+#
+# Copy this file to .spec/config.yaml and uncomment the keys you need.
+#
+# FORMAT: flat key-value pairs only.
+# Nested YAML structures, multi-line values, and quoted strings
+# are NOT supported by the pipeline parser.
+
+# Project-wide context applied to ALL phases.
+# Describe your tech stack, conventions, repo structure.
+# context: Go 1.22 monorepo, clean architecture, PostgreSQL, gRPC + REST
+
+# Phase-specific rules (supplement, not replace, template instructions).
+# rules.explore: Focus on internal/auth and internal/api packages
+# rules.requirements: All requirements must cover gRPC and REST variants
+# rules.design: Use Mermaid C4 diagrams for architecture
+# rules.task-plan: Prefer table-driven tests
+# rules.implementation: Run make generate before make test
+# rules.review: Pay extra attention to SQL injection in new handlers
+# rules.docs: Skip FILES.md — no file storage in this project
+
+# Name of an installed skill for test generation delegation.
+# If set, Design §2.8 and Implementation delegate test tasks to this skill.
+# test_skill: my-test-skill
+
+# Glob or file paths to representative test files (style reference).
+# If absent, the pipeline auto-discovers adjacent tests.
+# test_reference: internal/auth/*_test.go
+
+# Directory for project documentation (generated docs live here).
+# docs_dir: .spec
+
+# Days after which a generated doc is considered stale.
+# doc_freshness_days: 30
+
+# Automatically create a git branch on `pipeline.sh init`.
+# auto_branch: false
+
+# Prefix for auto-created branches.
+# branch_prefix: feature/

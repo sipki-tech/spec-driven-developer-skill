@@ -33,7 +33,7 @@ CONFIG_FILE="$PROJECT_ROOT/.spec/config.yaml"
 
 # --- helpers ---
 
-VERSION="1.1.1"
+VERSION="1.2.0"
 EXPLICIT_FEATURE=""
 
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -677,21 +677,26 @@ cmd_revisions() {
   esac
 
   local found=0
+  local tmp
+  tmp="$(mktemp)"
   if [ "$target_phase" = "all" ]; then
     echo "All revisions:"
     for p in explore requirements design task-plan implementation review; do
-      for f in $(find "$REVISIONS_DIR" -name "${p}-rev-*" 2>/dev/null | sort); do
+      find "$REVISIONS_DIR" -name "${p}-rev-*" 2>/dev/null | sort > "$tmp"
+      while IFS= read -r f; do
         printf "  [%s] %s\n" "$p" "$(basename "$f")"
         found=1
-      done
+      done < "$tmp"
     done
   else
     echo "Revisions for phase '$target_phase':"
-    for f in $(find "$REVISIONS_DIR" -name "${target_phase}-rev-*" 2>/dev/null | sort); do
+    find "$REVISIONS_DIR" -name "${target_phase}-rev-*" 2>/dev/null | sort > "$tmp"
+    while IFS= read -r f; do
       printf "  %s\n" "$(basename "$f")"
       found=1
-    done
+    done < "$tmp"
   fi
+  rm -f "$tmp"
 
   if [ "$found" -eq 0 ]; then
     info "No revisions recorded yet."
@@ -700,6 +705,67 @@ cmd_revisions() {
 
 cmd_version() {
   echo "Spec-Driven Dev Pipeline v${VERSION}"
+}
+
+# check_file_staleness <file> <templates_dir> <freshness_days> <now_epoch>
+# Outputs tab-separated: generated template age_days stale scope_changed
+check_file_staleness() {
+  local f="$1" templates_dir="$2" freshness_days="$3" now_epoch="$4"
+  local generated="null" template="null" age_days="null" stale="false" scope_changed="null"
+
+  local first_line
+  first_line="$(head -1 "$f" 2>/dev/null)"
+  case "$first_line" in
+    *"<!-- generated:"*"template:"*"-->"*)
+      local gen_date gen_tmpl
+      gen_date="$(echo "$first_line" | sed 's/.*<!-- generated: \([0-9-]*\),.*/\1/')"
+      gen_tmpl="$(echo "$first_line" | sed 's/.*template: \([^ ]*\) -->.*/\1/')"
+      if [ -n "$gen_date" ]; then
+        generated="\"$gen_date\""
+        template="\"$gen_tmpl\""
+        local gen_epoch
+        gen_epoch="$(date -j -f '%Y-%m-%d' "$gen_date" '+%s' 2>/dev/null || date -d "$gen_date" '+%s' 2>/dev/null || echo 0)"
+        if [ "$gen_epoch" -gt 0 ] && [ "$now_epoch" -gt 0 ]; then
+          age_days=$(( (now_epoch - gen_epoch) / 86400 ))
+
+          local tmpl_file="$templates_dir/$gen_tmpl"
+          if [ -f "$tmpl_file" ]; then
+            local scope_line
+            scope_line="$(head -1 "$tmpl_file" 2>/dev/null)"
+            case "$scope_line" in
+              "<!-- scope:"*"-->")
+                local patterns
+                patterns="$(echo "$scope_line" | sed 's/<!-- scope: //' | sed 's/ -->//' | sed 's/,[[:space:]]*/\n/g' | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+                if [ -n "$patterns" ]; then
+                  local git_hits
+                  # shellcheck disable=SC2086
+                  git_hits="$(cd "$PROJECT_ROOT" && git log --oneline --since="$gen_date" -- $patterns 2>/dev/null | head -1)"
+                  if [ -n "$git_hits" ]; then
+                    scope_changed="true"
+                    if [ "$age_days" -gt "$freshness_days" ]; then
+                      stale="true"
+                    fi
+                  else
+                    scope_changed="false"
+                  fi
+                fi
+                ;;
+              *)
+                if [ "$age_days" -gt "$freshness_days" ]; then
+                  stale="true"
+                fi
+                ;;
+            esac
+          else
+            if [ "$age_days" -gt "$freshness_days" ]; then
+              stale="true"
+            fi
+          fi
+        fi
+      fi
+      ;;
+  esac
+  printf '%s\t%s\t%s\t%s\t%s' "$generated" "$template" "$age_days" "$stale" "$scope_changed"
 }
 
 cmd_docs_check() {
@@ -725,80 +791,21 @@ cmd_docs_check() {
   local templates_dir="$SKILL_DIR/templates/docs"
   local now_epoch
   now_epoch="$(date +%s 2>/dev/null || echo 0)"
-  local threshold=$((freshness_days * 86400))
 
   if [ -d "$full_path" ]; then
     printf '{"exists": true, "dir": "%s", "freshness_days": %d, "files": [' "$(json_escape "$docs_dir")" "$freshness_days"
     local first=1
-    for f in $(find "$full_path" -maxdepth 1 -type f -name '*.md' 2>/dev/null | sort); do
-      local fname generated template age_days stale scope_changed
+    local stale_names=""
+    find "$full_path" -maxdepth 1 -type f -name '*.md' 2>/dev/null | sort | while IFS= read -r f; do
+      local fname result generated template age_days stale scope_changed
       fname="$(basename "$f")"
+      result="$(check_file_staleness "$f" "$templates_dir" "$freshness_days" "$now_epoch")"
 
-      # Parse freshness comment: <!-- generated: YYYY-MM-DD, template: name.md -->
-      generated="null"
-      template="null"
-      age_days="null"
-      stale="false"
-      scope_changed="null"
-      local first_line
-      first_line="$(head -1 "$f" 2>/dev/null)"
-      case "$first_line" in
-        *"<!-- generated:"*"template:"*"-->"*)
-          local gen_date gen_tmpl
-          gen_date="$(echo "$first_line" | sed 's/.*<!-- generated: \([0-9-]*\),.*/\1/')"
-          gen_tmpl="$(echo "$first_line" | sed 's/.*template: \([^ ]*\) -->.*/\1/')"
-          if [ -n "$gen_date" ]; then
-            generated="\"$gen_date\""
-            template="\"$gen_tmpl\""
-            # Compute age in days
-            local gen_epoch
-            gen_epoch="$(date -j -f '%Y-%m-%d' "$gen_date" '+%s' 2>/dev/null || date -d "$gen_date" '+%s' 2>/dev/null || echo 0)"
-            if [ "$gen_epoch" -gt 0 ] && [ "$now_epoch" -gt 0 ]; then
-              age_days=$(( (now_epoch - gen_epoch) / 86400 ))
-
-              # Content-aware staleness: check scope from template
-              local tmpl_file="$templates_dir/$gen_tmpl"
-              if [ -f "$tmpl_file" ]; then
-                local scope_line
-                scope_line="$(head -1 "$tmpl_file" 2>/dev/null)"
-                case "$scope_line" in
-                  "<!-- scope:"*"-->")
-                    # Extract patterns: <!-- scope: p1, p2, p3 --> → p1 p2 p3
-                    local patterns
-                    patterns="$(echo "$scope_line" | sed 's/<!-- scope: //' | sed 's/ -->//' | sed 's/,[[:space:]]*/\n/g' | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
-                    if [ -n "$patterns" ]; then
-                      # Check if any commits touched scope patterns since generation date
-                      local git_hits
-                      git_hits="$(cd "$PROJECT_ROOT" && eval "git log --oneline --since=\"$gen_date\" -- $patterns" 2>/dev/null | head -1)"
-                      if [ -n "$git_hits" ]; then
-                        scope_changed="true"
-                        # Scope has changes — apply age threshold
-                        if [ "$age_days" -gt "$freshness_days" ]; then
-                          stale="true"
-                        fi
-                      else
-                        scope_changed="false"
-                        # No scope changes — not stale regardless of age
-                      fi
-                    fi
-                    ;;
-                  *)
-                    # No scope in template — fallback to pure age check
-                    if [ "$age_days" -gt "$freshness_days" ]; then
-                      stale="true"
-                    fi
-                    ;;
-                esac
-              else
-                # Template file not found — fallback to pure age check
-                if [ "$age_days" -gt "$freshness_days" ]; then
-                  stale="true"
-                fi
-              fi
-            fi
-          fi
-          ;;
-      esac
+      generated="$(printf '%s' "$result" | cut -f1)"
+      template="$(printf '%s' "$result" | cut -f2)"
+      age_days="$(printf '%s' "$result" | cut -f3)"
+      stale="$(printf '%s' "$result" | cut -f4)"
+      scope_changed="$(printf '%s' "$result" | cut -f5)"
 
       if [ "$first" -eq 1 ]; then
         first=0
@@ -807,66 +814,201 @@ cmd_docs_check() {
       fi
       printf '{"name": "%s", "generated": %s, "template": %s, "age_days": %s, "stale": %s, "scope_changed": %s}' \
         "$(json_escape "$fname")" "$generated" "$template" "$age_days" "$stale" "$scope_changed"
+
+      if [ "$stale" = "true" ]; then
+        stale_names="$stale_names $fname"
+      fi
     done
     printf '], "stale": ['
-    # Collect stale file names (re-parse with same logic)
+    # Re-scan for stale files (subshell above cannot export stale_names)
     local sfirst=1
-    for f in $(find "$full_path" -maxdepth 1 -type f -name '*.md' 2>/dev/null | sort); do
-      local first_line fname
-      fname="$(basename "$f")"
-      first_line="$(head -1 "$f" 2>/dev/null)"
-      case "$first_line" in
-        *"<!-- generated:"*"template:"*"-->"*)
-          local gen_date gen_tmpl gen_epoch s_stale
-          gen_date="$(echo "$first_line" | sed 's/.*<!-- generated: \([0-9-]*\),.*/\1/')"
-          gen_tmpl="$(echo "$first_line" | sed 's/.*template: \([^ ]*\) -->.*/\1/')"
-          gen_epoch="$(date -j -f '%Y-%m-%d' "$gen_date" '+%s' 2>/dev/null || date -d "$gen_date" '+%s' 2>/dev/null || echo 0)"
-          s_stale="false"
-          if [ "$gen_epoch" -gt 0 ] && [ "$now_epoch" -gt 0 ]; then
-            local file_age=$(( (now_epoch - gen_epoch) / 86400 ))
-            local tmpl_file="$templates_dir/$gen_tmpl"
-            if [ -f "$tmpl_file" ]; then
-              local scope_line
-              scope_line="$(head -1 "$tmpl_file" 2>/dev/null)"
-              case "$scope_line" in
-                "<!-- scope:"*"-->")
-                  local patterns
-                  patterns="$(echo "$scope_line" | sed 's/<!-- scope: //' | sed 's/ -->//' | sed 's/,[[:space:]]*/\n/g' | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
-                  if [ -n "$patterns" ]; then
-                    local git_hits
-                    git_hits="$(cd "$PROJECT_ROOT" && eval "git log --oneline --since=\"$gen_date\" -- $patterns" 2>/dev/null | head -1)"
-                    if [ -n "$git_hits" ] && [ "$file_age" -gt "$freshness_days" ]; then
-                      s_stale="true"
-                    fi
-                  fi
-                  ;;
-                *)
-                  if [ "$file_age" -gt "$freshness_days" ]; then
-                    s_stale="true"
-                  fi
-                  ;;
-              esac
-            else
-              if [ "$file_age" -gt "$freshness_days" ]; then
-                s_stale="true"
-              fi
-            fi
-          fi
-          if [ "$s_stale" = "true" ]; then
-            if [ "$sfirst" -eq 1 ]; then
-              sfirst=0
-            else
-              printf ', '
-            fi
-            printf '"%s"' "$(json_escape "$fname")"
-          fi
-          ;;
-      esac
+    find "$full_path" -maxdepth 1 -type f -name '*.md' 2>/dev/null | sort | while IFS= read -r f; do
+      local result stale fname
+      result="$(check_file_staleness "$f" "$templates_dir" "$freshness_days" "$now_epoch")"
+      stale="$(printf '%s' "$result" | cut -f4)"
+      if [ "$stale" = "true" ]; then
+        fname="$(basename "$f")"
+        if [ "$sfirst" -eq 1 ]; then
+          sfirst=0
+        else
+          printf ', '
+        fi
+        printf '"%s"' "$(json_escape "$fname")"
+      fi
     done
     printf ']}\n'
   else
     printf '{"exists": false, "dir": "%s", "freshness_days": %d, "files": [], "stale": []}\n' "$(json_escape "$docs_dir")" "$freshness_days"
   fi
+}
+
+cmd_config_check() {
+  [ -f "$CONFIG_FILE" ] || { info "No config file found: $CONFIG_FILE"; return 0; }
+
+  local valid_keys=" context rules.explore rules.requirements rules.design rules.task-plan rules.implementation rules.review rules.docs test_skill test_reference docs_dir doc_freshness_days auto_branch branch_prefix "
+  local errors=0
+
+  info "Checking $CONFIG_FILE ..."
+
+  # Extract keys and validate against whitelist
+  local tmp
+  tmp="$(mktemp)"
+  grep '^[a-z]' "$CONFIG_FILE" 2>/dev/null > "$tmp" || true
+  while IFS= read -r line; do
+    local key
+    key="$(printf '%s' "$line" | sed 's/:.*//')"
+    case "$valid_keys" in
+      *" $key "*) ;;
+      *) warn "Unknown key: '$key'"; errors=$((errors + 1)) ;;
+    esac
+  done < "$tmp"
+  rm -f "$tmp"
+
+  # Type checks
+  local val
+  val="$(read_config doc_freshness_days "")"
+  if [ -n "$val" ]; then
+    case "$val" in
+      *[!0-9]*) warn "doc_freshness_days must be numeric, got: '$val'"; errors=$((errors + 1)) ;;
+    esac
+  fi
+
+  val="$(read_config auto_branch "")"
+  if [ -n "$val" ]; then
+    case "$val" in
+      true|false|yes|no|1|0) ;;
+      *) warn "auto_branch must be boolean (true/false/yes/no/1/0), got: '$val'"; errors=$((errors + 1)) ;;
+    esac
+  fi
+
+  if [ "$errors" -eq 0 ]; then
+    info "Config OK — all keys valid."
+  else
+    warn "$errors problem(s) found."
+    return 1
+  fi
+}
+
+cmd_inject() {
+  local target_phase="${1:-}"
+  local artifact_path="${2:-}"
+
+  if [ -z "$target_phase" ] || [ -z "$artifact_path" ]; then
+    die "Usage: pipeline.sh inject <phase> <path>"
+  fi
+
+  # Validate target phase
+  case "$target_phase" in
+    explore|requirements|design|task-plan|implementation|review) ;;
+    *) die "Unknown phase: $target_phase. Use: explore, requirements, design, task-plan, implementation, review." ;;
+  esac
+
+  resolve_feature || die "No active pipeline. Run 'pipeline.sh init <feature>' first."
+
+  local current_phase
+  current_phase="$(read_field phase)"
+  [ "$current_phase" = "done" ] && die "Pipeline already complete."
+
+  # Validate current phase <= target phase
+  local current_num target_num
+  current_num="$(phase_number "$current_phase")"
+  target_num="$(phase_number "$target_phase")"
+  if [ "$current_num" -gt "$target_num" ]; then
+    die "Cannot inject backward: current phase is '$current_phase' ($current_num), target is '$target_phase' ($target_num)."
+  fi
+
+  # Validate artifact exists
+  [ -f "$artifact_path" ] || die "Artifact file does not exist: $artifact_path"
+
+  # Validate artifact path: reject traversal, control characters
+  case "$artifact_path" in
+    *..*)  die "Artifact path must not contain '..' traversal" ;;
+  esac
+  if printf '%s' "$artifact_path" | grep -q '[[:cntrl:]]' 2>/dev/null; then
+    die "Artifact path must not contain control characters"
+  fi
+
+  # Lightweight content validation
+  case "$target_phase" in
+    requirements)
+      if ! grep -q 'WHEN\|SHALL' "$artifact_path" 2>/dev/null; then
+        warn "Requirements artifact should contain WHEN/SHALL keywords."
+      fi
+      ;;
+    design)
+      if ! grep -q 'Correctness\|Property' "$artifact_path" 2>/dev/null; then
+        warn "Design artifact should contain Correctness Properties."
+      fi
+      ;;
+  esac
+
+  # Skip intermediate phases (record as injected in history)
+  local p="$current_phase"
+  local history_count
+  history_count="$(read_field history_count)"
+  [ -z "$history_count" ] && history_count=0
+
+  while [ "$p" != "$target_phase" ]; do
+    write_field "history_${history_count}_phase" "$p"
+    write_field "history_${history_count}_artifact" "(injected)"
+    write_field "history_${history_count}_approved_at" "$(iso_now)"
+    history_count=$((history_count + 1))
+    p="$(next_phase "$p")"
+  done
+
+  # Set to target phase and register artifact
+  write_field phase "$target_phase"
+  write_field current_artifact "$artifact_path"
+  write_field history_count "$history_count"
+
+  # Save revision snapshot
+  local rev_count
+  rev_count="$(read_field "revision_count_${target_phase}")"
+  [ -z "$rev_count" ] && rev_count=0
+  rev_count=$((rev_count + 1))
+  local rev_name
+  rev_name="${target_phase}-rev-${rev_count}-$(iso_now_compact).md"
+  cp "$artifact_path" "$REVISIONS_DIR/$rev_name"
+  write_field "revision_count_${target_phase}" "$rev_count"
+
+  rebuild_json
+
+  local skipped=$((target_num - current_num))
+  if [ "$skipped" -gt 0 ]; then
+    info "$skipped phase(s) skipped to reach '$target_phase'."
+  fi
+  info "Artifact injected for phase '$target_phase': $artifact_path"
+  info "Ask user to approve, then run 'pipeline.sh approve'"
+}
+
+cmd_abandon() {
+  local feature="${1:-}"
+
+  # If --feature was specified globally, use it
+  if [ -z "$feature" ] && [ -n "$EXPLICIT_FEATURE" ]; then
+    feature="$EXPLICIT_FEATURE"
+  fi
+
+  # If still empty, try to resolve active feature
+  if [ -z "$feature" ]; then
+    feature="$(detect_active_feature)" || die "Multiple active pipelines. Use: pipeline.sh abandon <feature-name>"
+    [ -z "$feature" ] && die "No active pipeline to abandon."
+  fi
+
+  local fdir="$FEATURES_DIR/$feature"
+  [ -f "$fdir/pipeline.kv" ] || die "Feature '$feature' not found."
+
+  local phase
+  phase="$(grep "^phase=" "$fdir/pipeline.kv" 2>/dev/null | head -1 | cut -d'=' -f2-)"
+  [ "$phase" = "done" ] && die "Feature '$feature' is already completed."
+
+  set_feature_context "$feature"
+  write_field phase "done"
+  write_field abandoned_at "$(iso_now)"
+  rebuild_json
+
+  info "Feature '$feature' abandoned (was in phase: $phase)."
+  info "Artifacts remain in: .spec/features/$feature/"
 }
 
 cmd_help() {
@@ -889,6 +1031,10 @@ cmd_help() {
   echo "  history           Show all features and their status"
   echo "  docs-check        Check project documentation status (JSON)"
   echo "  task <T-N>        Mark implementation task as completed (resume tracking)"
+  echo "  config-check      Validate .spec/config.yaml keys and types"
+  echo "  inject <phase> <path>"
+  echo "                    Inject pre-written artifact and skip to that phase"
+  echo "  abandon [feature] Abandon an active pipeline (marks as done)"
   echo "  version           Show version"
   echo "  help              Show this message"
   echo ""
@@ -940,6 +1086,9 @@ case "${1:-help}" in
   history)  cmd_history ;;
   docs-check) cmd_docs_check ;;
   task)     cmd_task "$2" ;;
+  config-check) cmd_config_check ;;
+  inject)   shift; cmd_inject "$@" ;;
+  abandon)  shift; cmd_abandon "$@" ;;
   version|--version|-v) cmd_version ;;
   help|--help|-h) cmd_help ;;
   *)        die "Unknown command: $1. Run 'pipeline.sh help' for usage." ;;

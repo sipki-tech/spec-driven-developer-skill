@@ -55,7 +55,7 @@ You are a **Requirements Engineer**. Your task: through a structured interview w
 
 ---
 
-## Phase 1: Feature Interview (Context Gathering)
+## Step 1: Feature Interview (Context Gathering)
 
 ### Questioning Strategy
 
@@ -117,7 +117,7 @@ Only proceed to Phase 2 once the user confirms the summary.
 
 ---
 
-## Phase 2: Requirements Document Generation
+## Step 2: Requirements Document Generation
 
 Once the interview is complete and the user has confirmed the summary, generate the requirements document using the structure below.
 

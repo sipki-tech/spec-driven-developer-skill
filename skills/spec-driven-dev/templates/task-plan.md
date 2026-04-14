@@ -48,7 +48,7 @@ Keep in English (do not translate):
 
 ---
 
-## Phase 1: Input Document Analysis
+## Step 1: Input Document Analysis
 
 Before generating any tasks, analyze both input documents:
 
@@ -133,7 +133,7 @@ The work type determines the task order (see Task Order Rules below).
 
 ---
 
-## Phase 2: Implementation Plan Generation
+## Step 2: Implementation Plan Generation
 
 Use the **Observation-First TDD** methodology:
 
