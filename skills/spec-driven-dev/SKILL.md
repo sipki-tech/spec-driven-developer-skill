@@ -27,11 +27,12 @@ Each phase has a dedicated prompt template. Read the template for the **current*
 | Action | Command |
 |--------|---------|
 | Check state | `sh ./scripts/pipeline.sh status` |
-| Start feature | `sh ./scripts/pipeline.sh init [--branch] <name>` |
+| Start feature | `sh ./scripts/pipeline.sh init [--branch\|--worktree] <name>` |
 | Register output | `sh ./scripts/pipeline.sh artifact [path]` |
 | Advance phase | `sh ./scripts/pipeline.sh approve` (only after user says "approve") |
 | Mark task done | `sh ./scripts/pipeline.sh task T-N` (implementation phase only) |
 | Abandon feature | `sh ./scripts/pipeline.sh abandon [feature]` |
+| Finish branch | `sh ./scripts/pipeline.sh finish <merge\|pr\|keep\|discard>` |
 | Validate config | `sh ./scripts/pipeline.sh config-check` |
 | Inject artifact | `sh ./scripts/pipeline.sh inject <phase> <path>` |
 | Check docs | `sh ./scripts/pipeline.sh docs-check` |
@@ -68,6 +69,9 @@ sh ./scripts/pipeline.sh init <feature-name>
 # Start with auto-branch (creates git branch <prefix><name>)
 sh ./scripts/pipeline.sh init --branch <feature-name>
 
+# Start with worktree (creates isolated worktree in <worktree_dir>/<name>)
+sh ./scripts/pipeline.sh init --worktree <feature-name>
+
 # Register the artifact you generated for the current phase
 sh ./scripts/pipeline.sh artifact [path]
 
@@ -91,6 +95,9 @@ sh ./scripts/pipeline.sh config-check
 
 # Inject a pre-written artifact and skip to that phase
 sh ./scripts/pipeline.sh inject <phase> <path>
+
+# Finalize branch after pipeline completes (merge, push PR, keep, or discard)
+sh ./scripts/pipeline.sh finish <merge|pr|keep|discard>
 ```
 
 ### Parallel Pipelines
@@ -121,6 +128,8 @@ If the file `.spec/config.yaml` exists in the project root, read it before start
 | `doc_freshness_days` | integer | `30` | Days before a generated doc is stale |
 | `auto_branch` | boolean | `false` | Auto-create git branch on `init` |
 | `branch_prefix` | string | `feature/` | Prefix for auto-created branches |
+| `auto_worktree` | boolean | `false` | Auto-create git worktree on `init` (mutually exclusive with `auto_branch`) |
+| `worktree_dir` | string | `.worktrees` | Directory for worktrees (add to `.gitignore`) |
 
 Phase-specific rule keys: `rules.explore`, `rules.requirements`, `rules.design`, `rules.task-plan`, `rules.implementation`, `rules.review`, `rules.docs`.
 
@@ -206,6 +215,23 @@ For **bug fixes with a known reproduction** or other small, well-understood chan
 
 After the pipeline reaches `phase=done`, read `./templates/docs-maintenance.md` § Documentation Maintenance to check if project documentation needs updating.
 
+## Branch Finishing
+
+After documentation maintenance is complete (or skipped), finalize the feature branch.
+
+1. **Auto-detect git state:** run `git branch --show-current` and compare with the default branch (main/master).
+2. **If on a feature branch** (non-default branch):
+   - Present 4 options to the user (in the user's language):
+     1. **Merge locally** — merge the feature branch into the base branch
+     2. **Create PR** — push branch to origin for pull request
+     3. **Keep branch** — leave as-is for manual handling
+     4. **Discard** — delete the branch and all unmerged commits
+   - Wait for the user's choice.
+   - Run `pipeline.sh finish <merge|pr|keep|discard>`.
+3. **If on the default branch** (main/master) or git is unavailable:
+   - Run `pipeline.sh finish keep` and skip this step.
+4. **This is a soft suggestion, not a blocker.** If the user ignores it, the pipeline is still complete.
+
 ## Quick Start (for the agent)
 
 When the user says something like "I want to add feature X":
@@ -228,3 +254,4 @@ When the user says something like "I want to add feature X":
 16. Present final review document (verdict `PASS`) → wait for approve
 17. After review is approved → `pipeline.sh approve` → pipeline complete
 18. Check if documentation needs updating (see Documentation Maintenance)
+19. Check if the feature branch needs finalizing (see Branch Finishing) → present options → `pipeline.sh finish`

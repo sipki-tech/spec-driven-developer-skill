@@ -13,6 +13,7 @@ Antipattern tables for each pipeline phase. Referenced from the corresponding ph
 | Ignoring existing code | "I suggest adding a new auth module" | "Existing `src/auth` uses X pattern; we can extend it" | Always read codebase first |
 | Scope creep | "We should also add rate limiting and logging" | "Rate limiting could be v2; focus on core auth first" | Help user narrow, not expand |
 | Analysis paralysis | 5 options with no recommendation | "Option B is best because...; A is fallback if..." | Recommend clearly when path is evident |
+| Symptom-level fix | "Bug confirmed at line 42, let's fix it" | "Root cause: `validate()` skips nil check added in commit abc123; line 42 fails because input is nil" | Without root cause, fix may mask the real problem |
 
 ---
 
@@ -72,6 +73,7 @@ Antipattern tables for each pipeline phase. Referenced from the corresponding ph
 | Silent skip | Skip a failing task without noting it | Note the issue, ask user, document decision | Transparency over speed |
 | Plan modification | "This task doesn't make sense, I'll do it differently" | Execute as planned; note concerns for review phase | The plan was approved — execute it faithfully |
 | Silently leaving broken state | Continue to next task while tests are failing | Stop after 3 failed attempts, document state, ask user to decide | User must stay in control when implementation is stuck |
+| Unsupervised subagent | Dispatch subagent, accept its output without running tests | Dispatch subagent, then run full test suite yourself before marking task done | Subagent output must be verified — trust but verify |
 
 ---
 

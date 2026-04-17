@@ -27,7 +27,7 @@ When reviewing a small bug fix (1–2 REQs, 1–3 changed files):
 - **Code Quality & Security:** brief. If the fix is internal logic only: "No new endpoints, no user input changes."
 - **Findings:** 0–2 expected. Any `critical` findings still require a fix cycle.
 - **Fix cycles:** maximum **1 fix cycle** before escalating to user (vs. 3 for full pipeline). A small fix that still fails after 1 cycle likely has a design issue.
-- **Verification Evidence:** still required — actual stdout from test, build, lint.
+- **Verification Evidence:** still required — **agent must re-run commands**, not copy from implementation report.
 
 Target artifact size: **≤ 1 page** (excluding stdout).
 
@@ -47,6 +47,19 @@ Keep in English (do not translate):
 - Code identifiers, file paths, shell commands
 - Verdict labels: `PASS`, `NEEDS_CHANGES`, `BLOCK`
 - Severity labels: `critical`, `major`, `minor`, `nit`
+
+---
+
+## Step 0: Fresh Verification
+
+Before analyzing any code, **re-run test, build, and lint yourself** to establish a ground-truth baseline.
+
+1. Read the `Commands` block from the task plan (history[3].artifact).
+2. Execute each command (test, build, lint) and capture stdout.
+3. Record the results — these become the Verification Evidence baseline.
+4. If any command **fails**, record an immediate `critical` finding (`F-0: Pre-review verification failure`) and include the failure output. Continue the review — do NOT stop — but the verdict cannot be `PASS` until this is resolved in a fix cycle.
+
+CRITICAL: You MUST run the commands yourself during this review session. DO NOT copy or reuse stdout from the implementation report (history[4]). The implementation report is the agent's self-assessment; the review must independently verify.
 
 ---
 
@@ -238,7 +251,7 @@ The final artifact must contain these sections:
 
 ## Verification Evidence
 
-Actual (truncated) output of commands run during review. Do NOT replace with status assertions.
+Actual (truncated) output of commands **re-run by the reviewer during this review session**. DO NOT reuse stdout from the implementation report (history[4]). DO NOT replace with status assertions.
 
 - **Tests:**
 \`\`\`

@@ -160,6 +160,10 @@ Every task must follow this structure:
 - ***_Bug_Condition:_*** — for bug fix tasks: describe the condition that triggers the defect
 - ***_Expected_Behavior:_*** — for bug fix tasks: describe what correct behavior looks like
 - ***_Test_Style:_*** — for test tasks (RED, GREEN): reference to the test style source — either the skill name (Tier 1) or specific reference test file path (Tier 2). Omit for Tier 3.
+- ***_Complexity: mechanical | standard | complex_*** — task difficulty hint.
+  - `mechanical` — routine task with no design decisions (boilerplate, rename, add field, copy existing pattern)
+  - `standard` — typical task with a clear solution path (implement handler per spec, write tests for defined cases)
+  - `complex` — task with non-obvious solution, multiple edge cases, or concurrency/state concerns
 
 ### Instruction Keywords
 
@@ -220,6 +224,24 @@ GREEN (Preservation Tests — capture all current behavior)
 
 ---
 
+## Prohibited Formulations
+
+Every subtask must be **concrete enough for a different agent to execute without guessing**. If the executor would need to make a design decision, the formulation is too abstract.
+
+| Prohibited | Why | Correct alternative |
+|---|---|---|
+| "TBD", "TODO", "implement later" | Defers the decision to Implementation phase | Make the decision now; if unknown, ask the user |
+| "Add appropriate error handling" | Which errors? What handling? | "Return `ErrTokenExpired` when `exp < now`" |
+| "Add validation" | Which fields? Which rules? | "Validate `email` matches RFC 5322, return 400 if invalid" |
+| "Write tests for the above" | Which cases? Which assertions? | "Test: input `\"\"` → returns `ErrEmpty`; input `\"valid@x.com\"` → returns nil" |
+| "Similar to Task N" | Executor may not see Task N in context | Repeat the concrete details |
+| "Update the config" | Which keys? What values? | "Add key `rate_limit: 100` to `config.yaml` under `server` section" |
+| Steps without file path | Not clear where to act | Specify `file:function` or `file:line-range` |
+
+DO NOT use hedge words ("might", "should probably", "consider adding") in task instructions. Each instruction is either a concrete action or it does not belong in the plan.
+
+---
+
 ## Traceability Rules
 
 - **Every task** must have at least one `*_Requirements:_*` annotation.
@@ -247,6 +269,8 @@ Before delivering the plan, verify:
 - [ ] If code generation commands were discovered, implementation tasks that modify generated-source inputs include a generate subtask before test/build subtasks.
 - [ ] Test Infrastructure Discovery is completed and Test Style Source block is present.
 - [ ] The coverage matrix is present and complete.
+- [ ] No subtask contains prohibited formulations (see Prohibited Formulations section) — every instruction is concrete and executable without design decisions.
+- [ ] Every top-level task has a `*_Complexity:_*` annotation (`mechanical`, `standard`, or `complex`).
 
 ---
 
@@ -262,7 +286,8 @@ Do NOT suggest approval until **every** condition is true:
 6. Checkpoint (GATE) is the final task in the plan.
 7. Test Infrastructure Discovery is completed with Test Style Source block (tier + evidence).
 8. Command Discovery is completed with Commands block (real project commands, not placeholders).
-9. Artifact is registered via `pipeline.sh artifact <path>`.
+9. Every top-level task has a `*_Complexity:_*` annotation.
+10. Artifact is registered via `pipeline.sh artifact <path>`.
 
 ---
 

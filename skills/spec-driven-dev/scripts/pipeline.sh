@@ -291,13 +291,41 @@ rebuild_json() {
       printf '  "branch": null,\n'
     fi
 
+    # Include worktree if set
+    local wt
+    wt="$(read_field worktree 2>/dev/null || echo "")"
+    if [ -n "$wt" ]; then
+      printf '  "worktree": "%s",\n' "$(json_escape "$wt")"
+    else
+      printf '  "worktree": null,\n'
+    fi
+
     # Include last_completed_task if set
     local lct
     lct="$(read_field last_completed_task 2>/dev/null || echo "")"
     if [ -n "$lct" ]; then
-      printf '  "last_completed_task": "%s"\n' "$(json_escape "$lct")"
+      printf '  "last_completed_task": "%s",\n' "$(json_escape "$lct")"
     else
-      printf '  "last_completed_task": null\n'
+      printf '  "last_completed_task": null,\n'
+    fi
+
+    # Include finish fields if set
+    local fa ft fb
+    fa="$(read_field finish_action 2>/dev/null || echo "")"
+    ft="$(read_field finished_at 2>/dev/null || echo "")"
+    fb="$(read_field finish_base 2>/dev/null || echo "")"
+    if [ -n "$fa" ]; then
+      printf '  "finish_action": "%s",\n' "$(json_escape "$fa")"
+      printf '  "finished_at": "%s",\n' "$(json_escape "$ft")"
+      if [ -n "$fb" ]; then
+        printf '  "finish_base": "%s"\n' "$(json_escape "$fb")"
+      else
+        printf '  "finish_base": null\n'
+      fi
+    else
+      printf '  "finish_action": null,\n'
+      printf '  "finished_at": null,\n'
+      printf '  "finish_base": null\n'
     fi
 
     printf '}\n'
@@ -310,12 +338,14 @@ rebuild_json() {
 cmd_init() {
   # Parse init-specific flags
   local do_branch=""
+  local do_worktree=""
   local feature=""
   while [ $# -gt 0 ]; do
     case "$1" in
-      --branch)    do_branch="yes"; shift ;;
-      --no-branch) do_branch="no"; shift ;;
-      -*)          die "Unknown flag for init: $1" ;;
+      --branch)      do_branch="yes"; shift ;;
+      --worktree)    do_worktree="yes"; shift ;;
+      --no-branch)   do_branch="no"; do_worktree="no"; shift ;;
+      -*)            die "Unknown flag for init: $1" ;;
       *)
         [ -n "$feature" ] && die "Unexpected argument: $1"
         feature="$1"; shift
@@ -323,7 +353,12 @@ cmd_init() {
     esac
   done
 
-  [ -z "$feature" ] && die "Usage: pipeline.sh init [--branch|--no-branch] <feature-name>"
+  [ -z "$feature" ] && die "Usage: pipeline.sh init [--branch|--worktree|--no-branch] <feature-name>"
+
+  # Mutual exclusion
+  if [ "$do_branch" = "yes" ] && [ "$do_worktree" = "yes" ]; then
+    die "--branch and --worktree are mutually exclusive."
+  fi
 
   # Validate feature name (kebab-case)
   case "$feature" in
@@ -337,18 +372,58 @@ cmd_init() {
     die "Feature name too long (max 64 chars): $feature"
   fi
 
-  # Resolve branch creation: flag > config > default (no branch)
-  if [ -z "$do_branch" ]; then
-    local auto_branch
-    auto_branch="$(read_config auto_branch "false")"
-    case "$auto_branch" in
-      true|yes|1) do_branch="yes" ;;
-      *)          do_branch="no" ;;
+  # Resolve branch/worktree creation: flag > config > default (neither)
+  if [ -z "$do_branch" ] && [ -z "$do_worktree" ]; then
+    local auto_branch auto_worktree
+    auto_worktree="$(read_config auto_worktree "false")"
+    case "$auto_worktree" in
+      true|yes|1) do_worktree="yes" ;;
     esac
+    if [ "$do_worktree" != "yes" ]; then
+      auto_branch="$(read_config auto_branch "false")"
+      case "$auto_branch" in
+        true|yes|1) do_branch="yes" ;;
+        *)          do_branch="no" ;;
+      esac
+    fi
   fi
 
   local branch_name=""
-  if [ "$do_branch" = "yes" ]; then
+  local worktree_path=""
+
+  if [ "$do_worktree" = "yes" ]; then
+    # --- Worktree mode ---
+    if ! command -v git >/dev/null 2>&1; then
+      die "Git not found. Cannot create worktree."
+    fi
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+      die "Not a git repository. Cannot create worktree."
+    fi
+
+    local prefix wt_dir
+    prefix="$(read_config branch_prefix "feature/")"
+    wt_dir="$(read_config worktree_dir ".worktrees")"
+    branch_name="${prefix}${feature}"
+    worktree_path="${wt_dir}/${feature}"
+
+    # Check if branch already exists
+    if git rev-parse --verify "$branch_name" >/dev/null 2>&1; then
+      die "Branch '$branch_name' already exists."
+    fi
+
+    # Warn if worktree_dir is not in .gitignore
+    if [ -f ".gitignore" ]; then
+      if ! grep -qx "$wt_dir" .gitignore 2>/dev/null && ! grep -qx "$wt_dir/" .gitignore 2>/dev/null; then
+        warn "Worktree directory '$wt_dir' is not in .gitignore. Consider adding it."
+      fi
+    else
+      warn "No .gitignore found. Consider adding '$wt_dir' to .gitignore."
+    fi
+
+    git worktree add "$worktree_path" -b "$branch_name" || die "Failed to create worktree at '$worktree_path'."
+    info "Created worktree: $worktree_path (branch: $branch_name)"
+
+  elif [ "$do_branch" = "yes" ]; then
     # Verify git is available
     if ! command -v git >/dev/null 2>&1; then
       die "Git not found. Cannot create branch."
@@ -402,11 +477,16 @@ cmd_init() {
     if [ -n "$branch_name" ]; then
       echo "branch=$branch_name"
     fi
+    if [ -n "$worktree_path" ]; then
+      echo "worktree=$worktree_path"
+    fi
   } > "$KV_FILE"
 
   rebuild_json
   info "Pipeline initialized for '$feature'"
-  if [ -n "$branch_name" ]; then
+  if [ -n "$worktree_path" ]; then
+    info "Worktree: $worktree_path (branch: $branch_name)"
+  elif [ -n "$branch_name" ]; then
     info "Branch: $branch_name"
   fi
   info "Phase: [1/6] explore"
@@ -452,6 +532,15 @@ cmd_status() {
   echo "┌─────────────────────────────────────────────┐"
   printf "│ Feature: %-35s│\n" "$feature"
   printf "│ Phase:   [%s/6] %-30s│\n" "$(phase_number "$phase")" "$phase"
+  # Show branch/worktree info
+  local br_info wt_info
+  br_info="$(read_field branch 2>/dev/null || echo "")"
+  wt_info="$(read_field worktree 2>/dev/null || echo "")"
+  if [ -n "$wt_info" ]; then
+    printf "│ Worktree: %-34s│\n" "$wt_info"
+  elif [ -n "$br_info" ]; then
+    printf "│ Branch:  %-35s│\n" "$br_info"
+  fi
   if [ -n "$artifact" ]; then
     printf "│ Artifact: %-34s│\n" "$artifact"
   else
@@ -610,6 +699,7 @@ cmd_approve() {
     local feat
     feat="$(read_field feature)"
     info "Artifacts saved in: .spec/features/$feat/"
+    info "Next: check documentation (docs-check), then finish branch (pipeline.sh finish)"
   else
     info "Phase '$phase' approved."
     info "Advanced to: [$(phase_number "$next")/6] $next"
@@ -981,6 +1071,181 @@ cmd_inject() {
   info "Ask user to approve, then run 'pipeline.sh approve'"
 }
 
+cmd_finish() {
+  # Parse finish-specific flags and action
+  local action=""
+  local confirm=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --confirm) confirm="yes"; shift ;;
+      -*)        die "Unknown flag for finish: $1" ;;
+      *)
+        [ -n "$action" ] && die "Unexpected argument: $1"
+        action="$1"; shift
+        ;;
+    esac
+  done
+
+  [ -z "$action" ] && die "Usage: pipeline.sh finish <merge|pr|keep|discard> [--confirm]"
+
+  # Validate action
+  case "$action" in
+    merge|pr|keep|discard) ;;
+    *) die "Unknown finish action: $action. Use: merge, pr, keep, discard." ;;
+  esac
+
+  # Resolve feature (supports completed pipelines)
+  if [ -n "$EXPLICIT_FEATURE" ]; then
+    if [ ! -f "$FEATURES_DIR/$EXPLICIT_FEATURE/pipeline.kv" ]; then
+      die "Feature '$EXPLICIT_FEATURE' not found."
+    fi
+    set_feature_context "$EXPLICIT_FEATURE"
+    validate_kv
+  else
+    # For finish, we need to find a done-but-not-finished feature
+    local found=""
+    local count=0
+    if [ -d "$FEATURES_DIR" ]; then
+      for kv in "$FEATURES_DIR"/*/pipeline.kv; do
+        [ -f "$kv" ] || continue
+        local p fa
+        p="$(grep "^phase=" "$kv" 2>/dev/null | head -1 | cut -d'=' -f2-)"
+        fa="$(grep "^finish_action=" "$kv" 2>/dev/null | head -1 | cut -d'=' -f2-)"
+        if [ "$p" = "done" ] && [ -z "$fa" ]; then
+          local fn
+          fn="$(grep "^feature=" "$kv" 2>/dev/null | head -1 | cut -d'=' -f2-)"
+          found="$fn"
+          count=$((count + 1))
+        fi
+      done
+    fi
+    if [ "$count" -gt 1 ]; then
+      warn "Multiple completed pipelines awaiting finish:"
+      for kv in "$FEATURES_DIR"/*/pipeline.kv; do
+        [ -f "$kv" ] || continue
+        local p fa fn
+        p="$(grep "^phase=" "$kv" 2>/dev/null | head -1 | cut -d'=' -f2-)"
+        fa="$(grep "^finish_action=" "$kv" 2>/dev/null | head -1 | cut -d'=' -f2-)"
+        fn="$(grep "^feature=" "$kv" 2>/dev/null | head -1 | cut -d'=' -f2-)"
+        if [ "$p" = "done" ] && [ -z "$fa" ]; then
+          echo "  - $fn" >&2
+        fi
+      done
+      die "Use --feature <name> to select one."
+    fi
+    if [ -z "$found" ]; then
+      die "No completed pipeline awaiting finish. Run 'pipeline.sh history' to list features."
+    fi
+    set_feature_context "$found"
+    validate_kv
+  fi
+
+  local phase
+  phase="$(read_field phase)"
+  [ "$phase" != "done" ] && die "Pipeline not complete (current phase: $phase). Finish is only available after all phases are done."
+
+  # Check idempotency
+  local existing_action
+  existing_action="$(read_field finish_action 2>/dev/null || echo "")"
+  if [ -n "$existing_action" ]; then
+    die "Already finished (action: $existing_action). Nothing to do."
+  fi
+
+  # Git availability check
+  if [ "$action" != "keep" ]; then
+    if ! command -v git >/dev/null 2>&1; then
+      die "Git not found. Use 'finish keep' to skip git operations."
+    fi
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+      die "Not a git repository. Use 'finish keep' to skip git operations."
+    fi
+  fi
+
+  local feat branch current_branch worktree
+  feat="$(read_field feature)"
+  branch="$(read_field branch 2>/dev/null || echo "")"
+  worktree="$(read_field worktree 2>/dev/null || echo "")"
+  current_branch="$(git branch --show-current 2>/dev/null || echo "")"
+
+  # Determine base branch for merge/discard
+  local base_branch=""
+  if [ "$action" = "merge" ] || [ "$action" = "discard" ]; then
+    # Try to find default branch
+    if git rev-parse --verify main >/dev/null 2>&1; then
+      base_branch="main"
+    elif git rev-parse --verify master >/dev/null 2>&1; then
+      base_branch="master"
+    else
+      die "Cannot determine base branch (no main or master). Merge/discard manually."
+    fi
+
+    # Check for uncommitted changes
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+      die "Working tree has uncommitted changes. Commit or stash before '$action'."
+    fi
+  fi
+
+  # Determine which branch to operate on
+  local target_branch="${branch:-$current_branch}"
+
+  case "$action" in
+    merge)
+      [ -z "$target_branch" ] && die "No branch to merge (not on a feature branch and no branch recorded)."
+      [ "$target_branch" = "$base_branch" ] && die "Already on $base_branch. Nothing to merge."
+      # If worktree, remove it first (must not be in worktree dir when removing)
+      if [ -n "$worktree" ] && git worktree list 2>/dev/null | grep -q "$worktree"; then
+        git worktree remove "$worktree" || die "Failed to remove worktree '$worktree'."
+        info "Removed worktree: $worktree"
+      fi
+      git checkout "$base_branch" || die "Failed to checkout $base_branch."
+      git merge "$target_branch" || die "Merge failed. Resolve conflicts and retry."
+      write_field finish_action "merge"
+      write_field finished_at "$(iso_now)"
+      write_field finish_base "$base_branch"
+      rebuild_json
+      info "Merged '$target_branch' into '$base_branch'."
+      info "Tip: run tests to verify, then 'git branch -d $target_branch' to clean up."
+      ;;
+
+    pr)
+      [ -z "$target_branch" ] && die "No branch to push (not on a feature branch and no branch recorded)."
+      [ "$target_branch" = "$base_branch" ] && die "Already on $base_branch. Nothing to push."
+      git push -u origin "$target_branch" || die "Failed to push '$target_branch'."
+      write_field finish_action "pr"
+      write_field finished_at "$(iso_now)"
+      write_field finish_base "${base_branch:-}"
+      rebuild_json
+      info "Branch '$target_branch' pushed to origin."
+      info "Create a pull request: gh pr create --fill"
+      ;;
+
+    keep)
+      write_field finish_action "keep"
+      write_field finished_at "$(iso_now)"
+      rebuild_json
+      info "Branch kept as-is. Handle manually when ready."
+      ;;
+
+    discard)
+      [ "$confirm" != "yes" ] && die "Discard deletes the branch and all unmerged commits. Re-run with --confirm to proceed: pipeline.sh finish discard --confirm"
+      [ -z "$target_branch" ] && die "No branch to discard (not on a feature branch and no branch recorded)."
+      [ "$target_branch" = "$base_branch" ] && die "Cannot discard $base_branch."
+      # If worktree, force-remove it first
+      if [ -n "$worktree" ] && git worktree list 2>/dev/null | grep -q "$worktree"; then
+        git worktree remove --force "$worktree" || die "Failed to remove worktree '$worktree'."
+        info "Removed worktree: $worktree"
+      fi
+      git checkout "$base_branch" || die "Failed to checkout $base_branch."
+      git branch -D "$target_branch" || die "Failed to delete branch '$target_branch'."
+      write_field finish_action "discard"
+      write_field finished_at "$(iso_now)"
+      write_field finish_base "$base_branch"
+      rebuild_json
+      info "Branch '$target_branch' discarded."
+      ;;
+  esac
+}
+
 cmd_abandon() {
   local feature="${1:-}"
 
@@ -1005,6 +1270,16 @@ cmd_abandon() {
   set_feature_context "$feature"
   write_field phase "done"
   write_field abandoned_at "$(iso_now)"
+
+  # Clean up worktree if present
+  local wt
+  wt="$(read_field worktree 2>/dev/null || echo "")"
+  if [ -n "$wt" ] && command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
+    if git worktree list 2>/dev/null | grep -q "$wt"; then
+      git worktree remove --force "$wt" 2>/dev/null && info "Removed worktree: $wt"
+    fi
+  fi
+
   rebuild_json
 
   info "Feature '$feature' abandoned (was in phase: $phase)."
@@ -1020,10 +1295,11 @@ cmd_help() {
   echo "  --feature <name>  Select feature (needed when multiple are active)"
   echo ""
   echo "Commands:"
-  echo "  init [--branch|--no-branch] <feature>"
+  echo "  init [--branch|--worktree|--no-branch] <feature>"
   echo "                    Start a new pipeline (kebab-case name)"
   echo "                    --branch: create git branch <prefix><name>"
-  echo "                    --no-branch: skip auto-branch from config"
+  echo "                    --worktree: create git worktree in <worktree_dir>/<name>"
+  echo "                    --no-branch: skip auto-branch/worktree from config"
   echo "  status            Show current phase, artifacts, progress"
   echo "  artifact [path]   Register output artifact for current phase"
   echo "  approve           Advance to next phase (needs artifact)"
@@ -1034,6 +1310,8 @@ cmd_help() {
   echo "  config-check      Validate .spec/config.yaml keys and types"
   echo "  inject <phase> <path>"
   echo "                    Inject pre-written artifact and skip to that phase"
+  echo "  finish <action>   Finalize branch after pipeline completes"
+  echo "                    Actions: merge, pr, keep, discard (--confirm)"
   echo "  abandon [feature] Abandon an active pipeline (marks as done)"
   echo "  version           Show version"
   echo "  help              Show this message"
@@ -1058,6 +1336,8 @@ cmd_help() {
   echo " 17. (agent reads templates/review.md, reviews code)"
   echo " 18. artifact  ← writes .spec/features/my-feature/review.md"
   echo " 19. approve   ← user confirms → done!"
+  echo " 20. docs-check ← update project documentation if needed"
+  echo " 21. finish     ← merge, push PR, keep, or discard branch"
   echo ""
   echo "All artifacts are saved permanently in .spec/features/<feature>/ and tracked by git."
   echo "Tip: use 'revisions' to see previous versions of an artifact within a phase."
@@ -1088,6 +1368,7 @@ case "${1:-help}" in
   task)     cmd_task "$2" ;;
   config-check) cmd_config_check ;;
   inject)   shift; cmd_inject "$@" ;;
+  finish)   shift; cmd_finish "$@" ;;
   abandon)  shift; cmd_abandon "$@" ;;
   version|--version|-v) cmd_version ;;
   help|--help|-h) cmd_help ;;

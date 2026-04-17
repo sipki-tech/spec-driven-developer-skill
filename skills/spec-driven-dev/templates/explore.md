@@ -22,7 +22,13 @@ Read `./templates/_preamble.md` for Pipeline Integration and Project Context ins
 When the user describes a bug with a known reproduction or a small scoped change:
 
 - **Intent:** 1 paragraph (not 3–5). State the problem and the expected fix direction.
-- **Investigation:** confirm the bug exists, cite the relevant file(s) and line(s). No deep architectural survey.
+- **Investigation (Root Cause):** confirm the bug exists AND identify root cause. Follow these steps:
+  1. **Read errors** — read the full stack trace / error log, not just the last line. Note the originating call site.
+  2. **Reproduce** — run the failing test or command yourself. Capture actual output.
+  3. **Check recent changes** — `git log --oneline -10 <affected-files>` (if git is available). Look for the commit that introduced the regression.
+  4. **Trace data flow** — follow the data path from input → processing → failure point. Cite each file and line in the chain.
+  
+  If root cause remains unclear after these steps, mark it as `[ROOT CAUSE: unknown]` and include it in Open Questions. Do NOT skip to a fix direction based on symptoms alone.
 - **Options:** single recommended approach. Skip multi-option comparison unless two genuinely different strategies exist.
 - **Scope boundaries:** list only must-have (v1). Omit deferred/spike unless the user raised them.
 - **Assumptions:** 2–3 critical assumptions max.
@@ -30,6 +36,8 @@ When the user describes a bug with a known reproduction or a small scoped change
 - **Build Tooling:** still required (later phases depend on it).
 
 Target artifact size: **≤ 1 page**.
+
+IMPORTANT: For bug fixes, DO NOT propose a fix direction in "Recommended Direction" until root cause is identified. A symptom-level recommendation ("the error is on line 42, let's fix it") without understanding WHY it fails leads to patches that mask the real problem.
 
 ---
 
@@ -138,6 +146,11 @@ What problem we're solving and why.
 ## Investigation
 What was examined in the codebase. Key findings about existing code, patterns, constraints.
 
+## Root Cause
+<!-- Bug fixes only. Omit for pure features. -->
+Identified root cause of the defect: what is broken and why. Cite the originating file, line, and commit (if found).
+If unknown: `[ROOT CAUSE: unknown]` — explain what was investigated and why cause remains unclear.
+
 ## Build Tooling
 - **Orchestrator:** make / task / npm scripts / custom scripts / none
 - **Test:** `<command>`
@@ -178,6 +191,7 @@ Before presenting to the user:
 - [ ] Scope boundaries are suggested
 - [ ] Assumptions behind the recommendation are stated explicitly
 - [ ] Open questions are listed (if any)
+- [ ] For bug fixes: root cause is identified and cited, or explicitly marked `[ROOT CAUSE: unknown]`
 - [ ] Build Tooling section is present with orchestrator and key commands (test, build, lint; generate if applicable)
 
 ## Done when
@@ -189,8 +203,9 @@ Do NOT suggest approval until **every** condition is true:
 3. Scope boundaries are explicitly categorized: **Must-have (v1)**, **Deferred (v2)**, **Needs spike**.
 4. Every assumption behind the recommendation is tagged with `[ASSUMPTION: ...]`.
 5. Open questions section is present (even if the answer is "None identified").
-6. Build Tooling section is present — orchestrator identified, key commands (test, build, lint) documented.
-7. Artifact is registered via `pipeline.sh artifact <path>`.
+6. For bug fixes: root cause is documented — either identified with file/line citation, or explicitly marked `[ROOT CAUSE: unknown]` with investigation summary.
+7. Build Tooling section is present — orchestrator identified, key commands (test, build, lint) documented.
+8. Artifact is registered via `pipeline.sh artifact <path>`.
 
 ## Antipatterns
 

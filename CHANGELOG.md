@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-04-17
+
+### Added
+- **`finish` command** — `pipeline.sh finish merge|discard|archive` finalizes a feature after the pipeline completes: merges the feature branch into main (or discards/archives it), removes the git worktree if one was created, and marks the feature as `done`.
+- **Worktree support** — `pipeline.sh init --worktree <feature>` creates a dedicated git worktree for the feature branch. `auto_worktree: true` in `.spec/config.yaml` enables this by default. Worktrees are automatically removed on `finish` and `abandon`.
+- **Step 0: Fresh Verification in Review** — before accepting an implementation report, the agent must re-run the full test suite, build, and lint. Reusing stdout from a previous run is explicitly prohibited.
+- **Complexity field in Task Plan** — optional `Complexity: mechanical|standard|complex` annotation per task in the Task Plan template. Used by the implementation agent to evaluate execution strategy.
+- **Prohibited Formulations in Task Plan** — new section listing 7 banned placeholder patterns (e.g. "Add necessary tests", "Handle edge cases", "Update as needed") with corrected examples and a Quality Checklist entry.
+- **Root Cause Investigation in Explore fast-track** — 4-step investigation procedure (read errors → reproduce → check recent changes → trace data flow) with a hard guard: DO NOT propose a fix without identifying the root cause. Root cause is now a required field in the Explore output format.
+- **Step 1.5: Evaluate Execution Strategy in Implementation** — optional hint for agents that support subagent dispatch. When 6+ tasks are present and at least one is `Complexity: complex`, the agent may act as a controller and delegate individual tasks to subagents. Strict rules: one subagent per task, controller verifies tests after each, GATE task always stays with the controller.
+
+### Changed
+- **`SKILL.md`** — added Branch Finishing section, updated Quick Reference (`init [--branch|--worktree]`), State Machine (`finish merge|discard|archive`), and Config table (`auto_worktree`, `worktree_dir` keys).
+
+### Removed
+- **`ROADMAP.md`** — removed; all planned items have been implemented.
+
+### Fixed (antipatterns)
+- **Symptom-level fix** — added to `antipatterns.md` § Explore: proposing a fix that masks the symptom without identifying the root cause.
+- **Unsupervised subagent** — added to `antipatterns.md` § Implementation: dispatching a subagent and accepting its output without running the test suite.
+
 ## [1.2.0] - 2026-04-14
 
 ### Added

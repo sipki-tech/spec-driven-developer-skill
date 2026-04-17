@@ -61,6 +61,39 @@ Read the approved task plan artifact. Extract:
 
 **Resume check:** Run `pipeline.sh status`. If `Last task` is shown (e.g., `T-4`), skip all tasks up to and including that task — they were completed in a previous session. Resume from the next task.
 
+### Step 1.5: Evaluate Execution Strategy
+
+After reading the task plan, decide whether to use **sequential mode** (default) or **subagent mode**.
+
+**Consider subagent mode when ALL three conditions are true:**
+1. The plan contains **6+ top-level tasks**
+2. At least one task has `Complexity: complex`
+3. Your platform supports **dispatching isolated subagents** (e.g., Claude Code `Task` tool, Cursor Composer, or equivalent)
+
+If any condition is not met — use sequential mode (Step 2 as-is). Sequential is always safe.
+
+**Subagent mode architecture:**
+
+You become a **controller**. For each task `T-N` in order:
+1. **Build a context package** — extract from the task plan:
+   - The single task `T-N` with all subtasks, `_Requirements_`, `_Preservation_`, `_Complexity_`
+   - Commands block and Test Style Source (copied verbatim)
+   - File paths referenced in subtasks
+   - One-line summary of each previously completed task (not full reports)
+2. **Dispatch a subagent** with this context package as input
+3. **Receive the subagent's report** — changed files, test stdout, any issues
+4. **Verify** — run the full test suite yourself. If tests fail, fix or escalate (same rules as Step 4)
+5. **Mark done** — `pipeline.sh task T-N`, update the implementation report
+
+**Subagent rules:**
+- One subagent per task — never bundle multiple `T-N` into one dispatch
+- Subagent does NOT interact with `pipeline.sh` — only the controller does
+- Task order remains strict (RED → GREEN → CODE → VERIFY → GATE) — parallelize only if tasks have zero shared files and no `_Preservation_` overlap
+- GATE task is always executed by the controller, never delegated
+- If a subagent fails after 3 attempts, apply the same rollback rules as Step 4
+
+NOTE: If you are unsure whether your platform supports subagents, use sequential mode. The output is identical — only the execution strategy differs.
+
 ### Step 2: Execute Each Task
 
 For each task in order:
