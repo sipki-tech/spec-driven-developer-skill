@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-04-22
+
+### Added
+- **Standalone documentation workflow** — first-class docs generation/update flow without starting a feature pipeline. Driven by user phrases like *"generate documentation"*, *"update docs"*, *"actualize documentation"*. Uses its own state machine: `.spec/.docs-queue.kv`.
+- **`docs-init [--all|--update|<template>...]`** — creates the docs queue. `--all` queues every template from `templates/docs/`. `--update` queues only stale templates (uses scope-aware staleness from `docs-check`). Explicit template names queue exactly those.
+- **`docs-next`** — prints next pending template (name + path, tab-separated). Prints a fresh-chat hint to stderr after position 3 (sequential mode safety).
+- **`docs-done <template>`** — marks a template as completed and advances the queue. Reports remaining count.
+- **`docs-status`** — JSON queue status: `total`, `completed`, `current`, `pending[]`, `mode`, `docs_dir`, `created_at`. Returns `{"exists": false}` when no queue.
+- **`docs-reset`** — clears `.spec/.docs-queue.kv` (with completion summary).
+- **Subagent execution mode** for docs workflow — recommended default when toolset supports dispatch (Task tool, Composer, etc.). Up to 3 subagents in parallel, each one template. Controller verifies metadata after each (file exists, `<!-- generated: ... -->` on line 1, ≥ 50 lines), with max 2 retries before escalation. Sequential mode is fallback when subagent unavailable.
+
+### Changed
+- **`docs-maintenance.md`** — new top-level section "Standalone Documentation Workflow" with Step 2.5 "Evaluate Execution Strategy" (subagent default + sequential fallback). Pre-pipeline check now routes "generate docs" / "update docs" answers through the new queue commands. Legacy ad-hoc regeneration steps preserved as reference.
+- **`SKILL.md`** — added "generate documentation", "update docs", "actualize the documentation" to frontmatter keywords. New "Standalone Documentation Workflow" section before Pre-flight Checklist. Quick Reference and State Machine sections list the new commands.
+- **`pipeline.sh` version bumped to 1.4.0**, help text updated.
+
+### Added (antipatterns)
+- **Documentation (Standalone Workflow)** section with 5 entries: "All templates in one window", "Sequential when subagent available", "Bundled subagent dispatch", "Skipping metadata verification", "Running `init <feature>` for docs request".
+
 ## [1.3.0] - 2026-04-17
 
 ### Added

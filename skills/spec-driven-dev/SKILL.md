@@ -3,10 +3,14 @@ name: spec-driven-dev
 description: >
   Spec-driven development pipeline with 6 phases: Explore, Requirements,
   Design, Task Plan, Implementation, Review. Enforces human approval gates
-  between phases. Use when user wants structured feature development, spec-first
-  approach, or says "I want to add feature X", "new feature", "implement",
-  "build". Keywords: spec, requirements, design document, TDD plan, task plan,
-  implementation, code review, pipeline, approval gates, WHEN/SHALL.
+  between phases. Also provides a standalone documentation workflow for
+  generating or updating project docs without starting a feature pipeline.
+  Use when user wants structured feature development, spec-first approach,
+  or says "I want to add feature X", "new feature", "implement", "build",
+  "generate documentation", "update docs", "actualize the documentation".
+  Keywords: spec, requirements, design document, TDD plan, task plan,
+  implementation, code review, pipeline, approval gates, WHEN/SHALL,
+  generate docs, update docs, documentation queue.
 ---
 
 # Spec-Driven Development
@@ -36,6 +40,11 @@ Each phase has a dedicated prompt template. Read the template for the **current*
 | Validate config | `sh ./scripts/pipeline.sh config-check` |
 | Inject artifact | `sh ./scripts/pipeline.sh inject <phase> <path>` |
 | Check docs | `sh ./scripts/pipeline.sh docs-check` |
+| Init docs queue | `sh ./scripts/pipeline.sh docs-init [--all\|--update\|<template>...]` |
+| Next docs template | `sh ./scripts/pipeline.sh docs-next` |
+| Mark docs done | `sh ./scripts/pipeline.sh docs-done <template>` |
+| Docs queue status | `sh ./scripts/pipeline.sh docs-status` |
+| Reset docs queue | `sh ./scripts/pipeline.sh docs-reset` |
 | Multi-feature | Add `--feature <name>` before any command |
 
 **Hard rules:** check status first · never skip phases · never auto-approve · save artifacts to `.spec/features/<feature>/` · max 3 revisions then ask user
@@ -87,6 +96,15 @@ sh ./scripts/pipeline.sh history
 # Check project documentation status
 sh ./scripts/pipeline.sh docs-check
 
+# Standalone docs workflow (no feature pipeline involved)
+sh ./scripts/pipeline.sh docs-init --all       # bootstrap all templates
+sh ./scripts/pipeline.sh docs-init --update    # queue only stale docs
+sh ./scripts/pipeline.sh docs-init <t1> <t2>   # queue explicit templates
+sh ./scripts/pipeline.sh docs-next             # print next pending template
+sh ./scripts/pipeline.sh docs-done <template>  # mark template completed
+sh ./scripts/pipeline.sh docs-status           # JSON queue status
+sh ./scripts/pipeline.sh docs-reset            # clear the queue
+
 # Mark an implementation task as completed (enables resume)
 sh ./scripts/pipeline.sh task <T-N>
 
@@ -136,6 +154,17 @@ Phase-specific rule keys: `rules.explore`, `rules.requirements`, `rules.design`,
 Injection order: **context → phase rules → template instructions.**
 
 If the file does not exist, skip this step.
+
+## Standalone Documentation Workflow
+
+If the user requests documentation generation or update **without referring to a feature** (e.g. *"generate docs"*, *"update documentation"*, *"actualize the docs"*, *"refresh AUTH.md"*) — **do NOT run `pipeline.sh init`**. This is a standalone workflow with its own state machine.
+
+1. Read `./templates/docs-maintenance.md` § Standalone Documentation Workflow.
+2. Run `pipeline.sh docs-init [--all|--update|<template>...]` based on user intent.
+3. Choose execution strategy (subagent recommended when available, sequential as fallback).
+4. Drive the queue: `docs-next` → generate → `docs-done` (sequential), or dispatch up to 3 subagents in parallel (subagent mode).
+
+The standalone workflow is independent from feature pipelines — it does not create `.spec/features/<feature>/`, does not require approvals, and runs purely from `.spec/.docs-queue.kv` state.
 
 ## Pre-flight Checklist
 

@@ -89,3 +89,15 @@ Antipattern tables for each pipeline phase. Referenced from the corresponding ph
 | Inventing requirements during review | Review checks against approved requirements only — new requirements need a new pipeline |
 | Flagging style preferences as `major` | Style preferences are `nit` at most; reserve `major` for real issues |
 | Infinite fix loop | 3 fix cycles maximum — if not resolved, escalate to user instead of looping forever |
+
+---
+
+## Documentation (Standalone Workflow)
+
+| Antipattern | WRONG ❌ | RIGHT ✓ | Why |
+|---|---|---|---|
+| All templates in one window | Generate `core.md` + `development.md` + `auth.md` + ... back-to-back in a single chat | Use `pipeline.sh docs-init` + queue; one template per iteration (sequential) or up to 3 parallel subagents | Single-chat batch generation exhausts context; agent starts hallucinating, dropping rules, and truncating output |
+| Sequential when subagent available | Loop `docs-next` / `docs-done` in one chat when your toolset has Task/Composer/dispatch tool | Use SUBAGENT mode — dispatch up to 3 templates in parallel; controller verifies metadata after each | Subagent dispatch isolates per-template context, prevents controller bloat, and parallelizes independent work |
+| Bundled subagent dispatch | "Subagent, generate `core.md`, `development.md`, and `auth.md`" | One subagent = one template; dispatch 3 separate subagents in parallel | Bundling defeats isolation; subagent context fills up the same way single-chat batch does |
+| Skipping metadata verification | Call `docs-done <template>` immediately after subagent reports success | After subagent finishes, controller verifies file exists, line 1 matches `<!-- generated: YYYY-MM-DD, template: <name>.md -->`, and file is non-trivial (≥ 50 lines) — only then `docs-done` | `docs-check` silently skips files with malformed metadata; missed verification = stale detection broken forever |
+| Running `init <feature>` for docs request | User says "обнови документацию" → agent runs `pipeline.sh init update-docs` | Run `pipeline.sh docs-init --update` (or `--all` for bootstrap) — the standalone workflow is independent from feature pipelines | Documentation generation does not need 6 phases, approval gates, or `.spec/features/<feature>/` — it is a separate state machine |

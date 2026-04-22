@@ -4,6 +4,92 @@ This file contains all documentation generation, staleness checking, and post-pi
 
 ---
 
+## Standalone Documentation Workflow
+
+**Trigger:** the user requests documentation generation or update **without referring to a feature**. Examples:
+- *"Generate the project documentation"* / *"сгенерируй документацию"*
+- *"Update the docs"* / *"обнови документацию"*
+- *"Refresh AUTH.md"* / *"actualize the architecture doc"*
+
+**DO NOT** run `pipeline.sh init <feature>` for these requests. Documentation generation is a **standalone workflow** with its own state machine — `.spec/.docs-queue.kv` — driven by `pipeline.sh docs-*` commands.
+
+### Step 1: Detect intent
+
+| User intent | Command |
+|-------------|---------|
+| Bootstrap docs from scratch (no `<docs_dir>/` yet) | `pipeline.sh docs-init --all` |
+| Update stale docs only | `pipeline.sh docs-init --update` |
+| Regenerate specific docs (user named them, e.g. "regenerate AUTH and API") | `pipeline.sh docs-init auth api` |
+| User unsure | Run `pipeline.sh docs-check`. If `exists: false` → propose `--all`. If `stale: []` → propose `--update`. Wait for user confirmation. |
+
+### Step 2: Initialize the queue
+
+Run the chosen `docs-init` command. It writes `.spec/.docs-queue.kv` with the list of templates to process. If a queue already exists, the command errors — run `pipeline.sh docs-reset` first if you intend to start over.
+
+Then verify with `pipeline.sh docs-status` (returns JSON with `total`, `completed`, `pending`, `current`, `mode`).
+
+### Step 2.5: Evaluate Execution Strategy
+
+Documentation templates are **independent** (no shared state) and **heavy** (each requires reading dozens of source files). This makes parallelization safe and beneficial.
+
+**Default: SUBAGENT mode** — recommended whenever your toolset supports subagent dispatch (e.g. Claude Code `Task` tool, Cursor Composer, GitHub Copilot subagents, or equivalent).
+
+**Fallback: SEQUENTIAL mode** — used only when subagent dispatch is unavailable.
+
+**Skip mode selection if `total = 1`** — sequential always (overhead of dispatch not justified).
+
+#### Subagent mode (recommended default)
+
+You become the **controller**. Loop:
+
+1. Read `pipeline.sh docs-status` to see pending templates.
+2. **Dispatch up to 3 subagents in parallel** (rate-limit + controller context safety). Each subagent gets one template via this **context package**:
+   - Path to template file (e.g. `./templates/docs/auth.md`)
+   - `docs_dir` value (where to save output)
+   - `rules.docs` from `.spec/config.yaml` (if set)
+   - `context` from `.spec/config.yaml` (if set)
+   - One- or two-sentence summary of project stack (language, framework, key patterns)
+3. **Receive each subagent's report** — it should report which file(s) were created and where.
+4. **Verify** each generated file (controller, never delegated):
+   - File exists at the expected path
+   - **Line 1** matches `<!-- generated: YYYY-MM-DD, template: <name>.md -->`
+   - File is non-trivial (≥ 50 lines)
+5. **If verification fails**: re-dispatch with the verification error in the context package. Maximum **2 retries per template**, then escalate to the user.
+6. **If verification passes**: call `pipeline.sh docs-done <template>`.
+7. Repeat from step 1 until `docs-next` reports the queue is complete.
+8. Run `pipeline.sh docs-reset` to clear the queue.
+
+**Subagent rules:**
+- One subagent per template — never bundle multiple templates into one dispatch.
+- Subagents do NOT interact with `pipeline.sh` — only the controller does.
+- Up to 3 in parallel (no more — controller context fills up receiving multiple large outputs at once).
+- Verification is always performed by the controller.
+
+#### Sequential mode (fallback)
+
+Loop:
+
+1. Run `pipeline.sh docs-next` — it prints the next pending template name and path (tab-separated).
+2. Read the template file from the printed path.
+3. Read `rules.docs` and `context` from `.spec/config.yaml` (if set).
+4. Generate the documentation file(s) following the template's instructions. Save to `<docs_dir>/`. Verify line 1 has the `<!-- generated: ... -->` metadata.
+5. Run `pipeline.sh docs-done <template-name>`.
+6. Repeat until `docs-next` reports the queue is complete.
+
+**Fresh-chat hint:** after position 3, `docs-next` automatically prints a hint suggesting you start a fresh chat to avoid context exhaustion. The queue persists in `.spec/.docs-queue.kv` — in a new chat, run `pipeline.sh docs-status` to see your position and continue with `docs-next`.
+
+### Step 3: Auto-trigger from `docs-check`
+
+When `pipeline.sh docs-check` reports `stale: [...]` non-empty (during pre-pipeline check or on-demand), the workflow is:
+
+1. Inform the user: *"Found N stale doc(s): X, Y, Z. Initialize update queue? Say 'update docs' or 'skip'."*
+2. If user agrees → `pipeline.sh docs-init --update` → proceed to Step 2.5 (execution strategy).
+3. If user declines → no action. The user can run `pipeline.sh docs-init --update` later.
+
+The script does not auto-create the queue — explicit user consent is always required to begin a regeneration cycle.
+
+---
+
 ## Documentation Context
 
 The skill supports a self-documenting mechanic via a project documentation directory (default: `.spec/`, configurable via `docs_dir` in `config.yaml`).
@@ -20,14 +106,16 @@ When running `pipeline.sh init <feature-name>`, before starting the Explore phas
    - Read `README.md` for the documentation map
    - Use available docs (`ARCHITECTURE.md`, `PACKAGES.md`, etc.) as supplementary context for ALL phases
    - This is richer than `config.yaml` context and reduces the file-read budget in Explore phase
-   - Check the `stale` array in docs-check output. If stale files exist, suggest: *"Some docs are outdated (<file>: <N> days old). Regenerate before starting? Say 'update docs' or 'skip'."*
+   - Check the `stale` array in docs-check output. If stale files exist, suggest: *"Some docs are outdated (<file>: <N> days old). Regenerate before starting? Say 'update docs' or 'skip'."* If user agrees, follow the **Standalone Documentation Workflow** above (`pipeline.sh docs-init --update`).
 4. If the docs directory **does not exist**:
    - Suggest to the user: *"Project documentation (<docs_dir>/) not found. I can generate it to better understand your codebase. Say 'generate docs' or 'skip'."*
-   - If user says **"generate docs"**: read `./templates/docs/README.md` (manifest), then execute each template sequentially, saving results to `<docs_dir>/`
+   - If user says **"generate docs"**: follow the **Standalone Documentation Workflow** above (`pipeline.sh docs-init --all`).
    - If user says **"skip"**: proceed with the pipeline normally — documentation is NOT required
    - **This is a soft suggestion, not a blocker.** The pipeline works without documentation.
 
-### Stale doc regeneration workflow
+### Stale doc regeneration workflow (legacy ad-hoc)
+
+> **Prefer the Standalone Documentation Workflow** (top of this file) which uses the `docs-init --update` queue. The ad-hoc steps below remain as a reference for manual single-file regeneration.
 
 When `pipeline.sh docs-check` reports stale files (or the user requests a doc update), follow these steps:
 

@@ -33,7 +33,7 @@ CONFIG_FILE="$PROJECT_ROOT/.spec/config.yaml"
 
 # --- helpers ---
 
-VERSION="1.2.0"
+VERSION="1.4.0"
 EXPLICIT_FEATURE=""
 
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -932,6 +932,287 @@ cmd_docs_check() {
   fi
 }
 
+# --- standalone docs queue ---
+
+DOCS_QUEUE_FILE="$PROJECT_ROOT/.spec/.docs-queue.kv"
+
+docs_queue_read() {
+  # docs_queue_read <key> — read value from queue file
+  [ -f "$DOCS_QUEUE_FILE" ] || return 1
+  grep "^$1=" "$DOCS_QUEUE_FILE" 2>/dev/null | head -1 | sed "s/^$1=//"
+}
+
+docs_queue_write_status() {
+  # docs_queue_write_status <index> <status>
+  local idx="$1" status="$2"
+  local tmp="$DOCS_QUEUE_FILE.tmp"
+  grep -v "^template_${idx}_status=" "$DOCS_QUEUE_FILE" > "$tmp" 2>/dev/null || true
+  echo "template_${idx}_status=$status" >> "$tmp"
+  mv -f "$tmp" "$DOCS_QUEUE_FILE"
+}
+
+docs_template_name() {
+  # Extract template name from generated file metadata (line 1)
+  local f="$1"
+  local first_line
+  first_line="$(head -1 "$f" 2>/dev/null)"
+  case "$first_line" in
+    "<!-- generated:"*"-->")
+      printf '%s' "$first_line" | sed -n 's/.*template:[[:space:]]*\([^[:space:]]*\)\.md[[:space:]]*-->/\1/p'
+      ;;
+  esac
+}
+
+cmd_docs_init() {
+  local mode="all"
+  local explicit_templates=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --all)    mode="all"; shift ;;
+      --update) mode="update"; shift ;;
+      -*)       die "Unknown flag for docs-init: $1" ;;
+      *)
+        explicit_templates="$explicit_templates $1"
+        mode="explicit"
+        shift
+        ;;
+    esac
+  done
+
+  [ -f "$DOCS_QUEUE_FILE" ] && die "Docs queue already exists at $DOCS_QUEUE_FILE. Run 'pipeline.sh docs-reset' first."
+
+  local templates_dir="$SKILL_DIR/templates/docs"
+  local docs_dir
+  docs_dir="$(read_config docs_dir ".spec")"
+  local full_path="$PROJECT_ROOT/$docs_dir"
+
+  local templates=""
+  case "$mode" in
+    all)
+      for f in "$templates_dir"/*.md; do
+        local name
+        name="$(basename "$f" .md)"
+        [ "$name" = "README" ] && continue
+        templates="$templates $name"
+      done
+      ;;
+    update)
+      [ -d "$full_path" ] || die "Docs directory '$docs_dir' does not exist. Use --all to bootstrap."
+      local freshness_days
+      freshness_days="$(read_config doc_freshness_days "30")"
+      local now_epoch
+      now_epoch="$(date +%s 2>/dev/null || echo 0)"
+      # Iterate stale files, extract template names
+      local tmp_list
+      tmp_list="$(mktemp)"
+      find "$full_path" -maxdepth 1 -type f -name '*.md' 2>/dev/null | sort > "$tmp_list"
+      while IFS= read -r f; do
+        local result stale tmpl
+        result="$(check_file_staleness "$f" "$templates_dir" "$freshness_days" "$now_epoch")"
+        stale="$(printf '%s' "$result" | cut -f4)"
+        if [ "$stale" = "true" ]; then
+          tmpl="$(docs_template_name "$f")"
+          if [ -n "$tmpl" ]; then
+            case " $templates " in
+              *" $tmpl "*) ;;
+              *) templates="$templates $tmpl" ;;
+            esac
+          fi
+        fi
+      done < "$tmp_list"
+      rm -f "$tmp_list"
+      ;;
+    explicit)
+      templates="$explicit_templates"
+      ;;
+  esac
+
+  mkdir -p "$(dirname "$DOCS_QUEUE_FILE")"
+
+  # Build queue file
+  local count=0
+  local tmp_queue="$DOCS_QUEUE_FILE.tmp"
+  {
+    echo "created_at=$(iso_now)"
+    echo "docs_dir=$docs_dir"
+    echo "mode=$mode"
+  } > "$tmp_queue"
+
+  for t in $templates; do
+    if [ ! -f "$templates_dir/$t.md" ]; then
+      warn "Template not found, skipping: $t"
+      continue
+    fi
+    echo "template_${count}=$t" >> "$tmp_queue"
+    echo "template_${count}_status=pending" >> "$tmp_queue"
+    count=$((count + 1))
+  done
+  echo "total=$count" >> "$tmp_queue"
+
+  if [ "$count" -eq 0 ]; then
+    rm -f "$tmp_queue"
+    info "No templates to queue (nothing stale or none selected)."
+    return 0
+  fi
+
+  mv -f "$tmp_queue" "$DOCS_QUEUE_FILE"
+
+  info "Docs queue created: $count template(s), mode=$mode."
+  info "Next: pipeline.sh docs-next"
+  info ""
+  info "Execution strategy:"
+  info "  - If your toolset supports subagent dispatch (Task/Composer/etc):"
+  info "    use SUBAGENT mode — dispatch up to 3 templates in parallel."
+  info "  - Otherwise: SEQUENTIAL mode — one template per iteration."
+  info "  See ./templates/docs-maintenance.md § Standalone Documentation Workflow."
+}
+
+cmd_docs_next() {
+  [ -f "$DOCS_QUEUE_FILE" ] || die "No docs queue. Run 'pipeline.sh docs-init' first."
+
+  local total
+  total="$(docs_queue_read total)"
+  [ -z "$total" ] && total=0
+
+  local i=0
+  local templates_dir="$SKILL_DIR/templates/docs"
+  local docs_dir
+  docs_dir="$(docs_queue_read docs_dir)"
+
+  while [ "$i" -lt "$total" ]; do
+    local status
+    status="$(docs_queue_read "template_${i}_status")"
+    if [ "$status" = "pending" ]; then
+      local name
+      name="$(docs_queue_read "template_${i}")"
+      printf '%s\t%s\n' "$name" "$templates_dir/$name.md"
+      # Sequential mode hint after position 3
+      if [ "$i" -ge 3 ]; then
+        info "" >&2
+        info "Tip: if context feels heavy, start a fresh chat and resume" >&2
+        info "     with 'pipeline.sh docs-status' (sequential mode)." >&2
+      fi
+      return 0
+    fi
+    i=$((i + 1))
+  done
+
+  info "Docs queue complete: all $total template(s) processed."
+  info "Run 'pipeline.sh docs-reset' to clear the queue."
+  return 0
+}
+
+cmd_docs_done() {
+  local name="${1:-}"
+  [ -z "$name" ] && die "Usage: pipeline.sh docs-done <template>"
+  [ -f "$DOCS_QUEUE_FILE" ] || die "No docs queue. Run 'pipeline.sh docs-init' first."
+
+  local total
+  total="$(docs_queue_read total)"
+  [ -z "$total" ] && total=0
+
+  local i=0
+  while [ "$i" -lt "$total" ]; do
+    local entry
+    entry="$(docs_queue_read "template_${i}")"
+    if [ "$entry" = "$name" ]; then
+      local status
+      status="$(docs_queue_read "template_${i}_status")"
+      if [ "$status" = "done" ]; then
+        warn "Template '$name' already marked done."
+        return 0
+      fi
+      docs_queue_write_status "$i" "done"
+      info "Marked done: $name ($((i + 1))/$total)"
+      # Check if queue is now complete
+      local remaining=0
+      local j=0
+      while [ "$j" -lt "$total" ]; do
+        local s
+        s="$(docs_queue_read "template_${j}_status")"
+        [ "$s" = "pending" ] && remaining=$((remaining + 1))
+        j=$((j + 1))
+      done
+      if [ "$remaining" -eq 0 ]; then
+        info "Docs queue complete. Run 'pipeline.sh docs-reset' to clear it."
+      fi
+      return 0
+    fi
+    i=$((i + 1))
+  done
+
+  die "Template '$name' not found in queue."
+}
+
+cmd_docs_status() {
+  if [ ! -f "$DOCS_QUEUE_FILE" ]; then
+    printf '{"exists": false}\n'
+    return 0
+  fi
+
+  local total docs_dir mode created_at
+  total="$(docs_queue_read total)"
+  docs_dir="$(docs_queue_read docs_dir)"
+  mode="$(docs_queue_read mode)"
+  created_at="$(docs_queue_read created_at)"
+  [ -z "$total" ] && total=0
+
+  local completed=0
+  local pending_list=""
+  local current=""
+  local first_pending_set=0
+  local i=0
+  while [ "$i" -lt "$total" ]; do
+    local name status
+    name="$(docs_queue_read "template_${i}")"
+    status="$(docs_queue_read "template_${i}_status")"
+    if [ "$status" = "done" ]; then
+      completed=$((completed + 1))
+    else
+      if [ "$first_pending_set" -eq 0 ]; then
+        current="$name"
+        first_pending_set=1
+      fi
+      if [ -z "$pending_list" ]; then
+        pending_list="\"$(json_escape "$name")\""
+      else
+        pending_list="$pending_list, \"$(json_escape "$name")\""
+      fi
+    fi
+    i=$((i + 1))
+  done
+
+  printf '{"exists": true, "total": %d, "completed": %d, "current": %s, "pending": [%s], "mode": "%s", "docs_dir": "%s", "created_at": "%s"}\n' \
+    "$total" \
+    "$completed" \
+    "$([ -n "$current" ] && printf '"%s"' "$(json_escape "$current")" || printf 'null')" \
+    "$pending_list" \
+    "$(json_escape "$mode")" \
+    "$(json_escape "$docs_dir")" \
+    "$(json_escape "$created_at")"
+}
+
+cmd_docs_reset() {
+  if [ ! -f "$DOCS_QUEUE_FILE" ]; then
+    info "No docs queue to reset."
+    return 0
+  fi
+
+  local total completed=0
+  total="$(docs_queue_read total)"
+  [ -z "$total" ] && total=0
+  local i=0
+  while [ "$i" -lt "$total" ]; do
+    local s
+    s="$(docs_queue_read "template_${i}_status")"
+    [ "$s" = "done" ] && completed=$((completed + 1))
+    i=$((i + 1))
+  done
+
+  rm -f "$DOCS_QUEUE_FILE"
+  info "Docs queue reset (was: $completed/$total completed)."
+}
+
 cmd_config_check() {
   [ -f "$CONFIG_FILE" ] || { info "No config file found: $CONFIG_FILE"; return 0; }
 
@@ -1306,6 +1587,15 @@ cmd_help() {
   echo "  revisions [phase] Show revision history (current phase or specify: explore, all)"
   echo "  history           Show all features and their status"
   echo "  docs-check        Check project documentation status (JSON)"
+  echo "  docs-init [--all|--update|<template>...]"
+  echo "                    Create standalone docs generation queue"
+  echo "                    --all: queue all available templates"
+  echo "                    --update: queue only stale templates"
+  echo "                    <template>...: queue explicit templates by name"
+  echo "  docs-next         Print next pending template (name + path)"
+  echo "  docs-done <name>  Mark template as completed in queue"
+  echo "  docs-status       Show docs queue progress (JSON)"
+  echo "  docs-reset        Clear the docs queue"
   echo "  task <T-N>        Mark implementation task as completed (resume tracking)"
   echo "  config-check      Validate .spec/config.yaml keys and types"
   echo "  inject <phase> <path>"
@@ -1370,6 +1660,11 @@ case "${1:-help}" in
   inject)   shift; cmd_inject "$@" ;;
   finish)   shift; cmd_finish "$@" ;;
   abandon)  shift; cmd_abandon "$@" ;;
+  docs-init)   shift; cmd_docs_init "$@" ;;
+  docs-next)   cmd_docs_next ;;
+  docs-done)   shift; cmd_docs_done "$@" ;;
+  docs-status) cmd_docs_status ;;
+  docs-reset)  cmd_docs_reset ;;
   version|--version|-v) cmd_version ;;
   help|--help|-h) cmd_help ;;
   *)        die "Unknown command: $1. Run 'pipeline.sh help' for usage." ;;
